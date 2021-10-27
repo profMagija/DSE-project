@@ -27,7 +27,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		routeTable:  make(map[string]string),
 		status:      make(map[string]uint),
 		savedRumors: make(map[string][]types.Rumor),
-		ackChanMap:  make(map[string]chan struct{}),
+		ackNotif:    NotifChan{},
 	}
 
 	n.routeTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
@@ -54,8 +54,7 @@ type node struct {
 	routeMutex sync.RWMutex
 	routeTable map[string]string
 
-	ackChanLock sync.RWMutex
-	ackChanMap  map[string]chan struct{}
+	ackNotif NotifChan
 }
 
 // Returns the current node address.

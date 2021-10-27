@@ -1,8 +1,6 @@
 package impl
 
 import (
-	"time"
-
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -124,7 +122,7 @@ func (n *node) spreadRumor(sender string, msg *transport.Message) {
 				Msg:    msg,
 			}
 
-			ackCh := n.createAckChannel(hdr2.PacketID)
+			n.ackNotif.CreateChan(hdr2.PacketID)
 
 			err := n.conf.Socket.Send(peer, pkt2, n.conf.AckTimeout)
 			if err != nil {
@@ -133,7 +131,7 @@ func (n *node) spreadRumor(sender string, msg *transport.Message) {
 				continue
 			}
 
-			if n.waitForAck(hdr2.PacketID, n.conf.AckTimeout, ackCh) {
+			if _, ok := n.ackNotif.WaitChanTimeout(hdr2.PacketID, n.conf.AckTimeout); ok {
 				log.Debug().Msgf("[%v] rumor acked", n.Addr())
 				return
 			}
@@ -145,64 +143,4 @@ func (n *node) spreadRumor(sender string, msg *transport.Message) {
 			return
 		}
 	}
-}
-
-// Create and return an ACK channel for a given packetId.
-// The channel should be written to when a message is ACKed, and read from when waiting for an ack.
-// The channel is buffered so that the ACK can be registered without blocking.
-// NOTE: be sure to create the channel before sending the packet.
-func (n *node) createAckChannel(packetId string) chan struct{} {
-	n.ackChanLock.Lock()
-	defer n.ackChanLock.Unlock()
-
-	ch := make(chan struct{}, 1)
-	n.ackChanMap[packetId] = ch
-	return ch
-}
-
-// Delete the ACK channel for the given packetId.
-// This prevents a memory leak that would otherwise occur.
-// The channel should be deleted when an ack is received or a timeout occurs.
-func (n *node) deleteAckChannel(packetId string) {
-	n.ackChanLock.Lock()
-	defer n.ackChanLock.Unlock()
-
-	delete(n.ackChanMap, packetId)
-}
-
-// ACK a packet. Writes to the corresponding ack channel. Returns
-// true if the packet is ACKed, and false if the timeout already
-// expired (because the channel is deleted).
-func (n *node) ackPacket(packetId string) bool {
-	n.ackChanLock.RLock()
-	defer n.ackChanLock.RUnlock()
-
-	ch, ok := n.ackChanMap[packetId]
-	if !ok {
-		return false
-	}
-
-	ch <- struct{}{}
-	return true
-}
-
-// Wait for the packet ACK. Returns `true` if the ACK has been received, and `false` if timeout
-// expired. A timeout of 0 indicates no timeout (the function will wait forever).
-// Deletes the ACK channel to free memory.
-func (n *node) waitForAck(packetId string, timeout time.Duration, ch chan struct{}) bool {
-	success := false
-
-	if timeout == 0 {
-		<-ch
-		success = true
-	} else {
-		select {
-		case <-ch:
-			success = true
-		case <-time.After(timeout):
-		}
-	}
-
-	n.deleteAckChannel(packetId)
-	return success
 }

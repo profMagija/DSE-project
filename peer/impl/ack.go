@@ -17,7 +17,7 @@ func (n *node) processAckMessage(msg types.Message, pkt transport.Packet) error 
 
 	var m types.Message = &ackM.Status
 
-	n.ackPacket(ackM.AckedPacketID)
+	n.ackNotif.WriteChan(ackM.AckedPacketID, struct{}{})
 
 	err := n.processStatusMessage(m, pkt)
 	if err != nil {
