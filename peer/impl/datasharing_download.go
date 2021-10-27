@@ -19,7 +19,6 @@ func (n *node) processDataRequestMessage(msg types.Message, pkt transport.Packet
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
 	val := n.conf.Storage.GetDataBlobStore().Get(drm.Key)
-	n.SetRoutingEntry(pkt.Header.Source, pkt.Header.RelayedBy)
 
 	rmsg := types.DataReplyMessage{
 		RequestID: drm.RequestID,
@@ -43,7 +42,6 @@ func (n *node) processDataReplyMessage(msg types.Message, pkt transport.Packet) 
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
-	n.SetRoutingEntry(pkt.Header.Source, pkt.Header.RelayedBy)
 	n.ackNotif.WriteChan(drm.RequestID, drm.Value)
 	return nil
 }
