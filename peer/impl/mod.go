@@ -55,7 +55,10 @@ type node struct {
 	routeMutex sync.RWMutex
 	routeTable map[string]string
 
-	ackNotif NotifChan
+	ackNotif    NotifChan
+	searchNotif NotifChan
+	
+	searchDedup sync.Map
 
 	cataLock sync.RWMutex
 	catalog  peer.Catalog
@@ -163,6 +166,8 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(m types.Message, p transport.Packet) error { return nil })
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, n.processDataRequestMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.processDataReplyMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.processSearchRequestMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.processSearchReplyMessage)
 
 	return nil
 }

@@ -130,3 +130,23 @@ func (n *node) isPeer(addr string) bool {
 	defer n.routeMutex.RUnlock()
 	return addr != n.Addr() && n.routeTable[addr] == addr
 }
+
+func (n *node) getPeerPermutation(except... string) []string {
+	n.routeMutex.RLock()
+	defer n.routeMutex.RUnlock()
+	
+	res := make([]string, 0)
+	for relay, p := range n.routeTable {
+		if p != n.addr && relay == p && !memberOf(p, except) {
+			res = append(res, p)
+		}
+	}
+	
+	rand.Shuffle(len(res), func(i, j int) {
+		tmp := res[i]
+		res[i] = res[j]
+		res[j] = tmp
+	});
+	
+	return res
+}

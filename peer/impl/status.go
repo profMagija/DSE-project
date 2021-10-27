@@ -27,7 +27,7 @@ func (n *node) processStatusMessage(msg types.Message, pkt transport.Packet) err
 	sender := pkt.Header.Source
 
 	// ensure sender is our peer
-	if !n.isPeer(sender) && sender != n.Addr() && sender != n.Addr() {
+	if !n.isPeer(sender) && sender != n.Addr() {
 		n.AddPeer(sender)
 	}
 

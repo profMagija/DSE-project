@@ -18,13 +18,13 @@ func (n *node) processDataRequestMessage(msg types.Message, pkt transport.Packet
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
-	
 	val := n.conf.Storage.GetDataBlobStore().Get(drm.Key)
-	
+	n.SetRoutingEntry(pkt.Header.Source, pkt.Header.RelayedBy)
+
 	rmsg := types.DataReplyMessage{
 		RequestID: drm.RequestID,
-		Key: drm.Key,
-		Value: val,
+		Key:       drm.Key,
+		Value:     val,
 	}
 	trRmsg, err := n.conf.MessageRegistry.MarshalMessage(rmsg)
 	if err != nil {
@@ -43,7 +43,7 @@ func (n *node) processDataReplyMessage(msg types.Message, pkt transport.Packet) 
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
-	
+	n.SetRoutingEntry(pkt.Header.Source, pkt.Header.RelayedBy)
 	n.ackNotif.WriteChan(drm.RequestID, drm.Value)
 	return nil
 }
@@ -53,13 +53,13 @@ func (n *node) downloadChunk(key string) ([]byte, error) {
 	if !ok {
 		return nil, xerrors.Errorf("file not found: %v", key)
 	}
-	
+
 	timeout := n.conf.BackoffDataRequest.Initial
 	for i := uint(0); i < n.conf.BackoffDataRequest.Retry; i++ {
 		rid := xid.New().String()
 		msg := types.DataRequestMessage{
 			RequestID: rid,
-			Key: key,
+			Key:       key,
 		}
 		trMsg, err := n.conf.MessageRegistry.MarshalMessage(msg)
 		if err != nil {
@@ -80,7 +80,7 @@ func (n *node) downloadChunk(key string) ([]byte, error) {
 		}
 		return res.([]byte), nil
 	}
-	
+
 	return nil, xerrors.Errorf("no response")
 }
 
@@ -89,12 +89,12 @@ func (n *node) getChunk(key string) ([]byte, error) {
 	if val != nil {
 		return val, nil
 	}
-	
+
 	val, err := n.downloadChunk(key)
 	if err != nil {
 		return nil, xerrors.Errorf("error fetching chunk: %v", err)
 	}
-	
+
 	return val, nil
 }
 
@@ -105,7 +105,7 @@ func (n *node) Download(metahash string) ([]byte, error) {
 	}
 	metafile := string(metafileb)
 	chunkKeys := strings.Split(metafile, peer.MetafileSep)
-	fileData := make([]byte, 0, len(chunkKeys) * int(n.conf.ChunkSize))
+	fileData := make([]byte, 0, len(chunkKeys)*int(n.conf.ChunkSize))
 	for i, chunkKey := range chunkKeys {
 		chunkData, err := n.getChunk(chunkKey)
 		if err != nil {

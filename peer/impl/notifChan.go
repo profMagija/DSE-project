@@ -12,7 +12,11 @@ type NotifChan struct {
 }
 
 func (n *NotifChan) CreateChan(id string) {
-	ch := make(chan interface{}, 1)
+	n.CreateChanWithSize(id, 1)
+}
+
+func (n *NotifChan) CreateChanWithSize(id string, size int) {
+	ch := make(chan interface{}, size)
 	n.cmap.Store(id, ch)
 }
 
@@ -56,16 +60,15 @@ func (n *NotifChan) WaitChanTimeout(id string, timeout time.Duration) (v interfa
 	return
 }
 
-func (n *NotifChan) WaitChanNonblocking(id string) (v interface{}, ok bool) {
+func (n *NotifChan) WaitChanNonblockingNoDelete(id string) (v interface{}, ok bool) {
 	ch := n.getChan(id)
 	select {
-	case v = <- ch:
+	case v = <-ch:
 		ok = true
 	default:
 		v = nil
 		ok = false
 	}
-	n.cmap.Delete(id)
 	return
 }
 
@@ -74,4 +77,19 @@ func (n *NotifChan) WriteChan(id string, v interface{}) {
 	if ok {
 		ch <- v
 	}
+}
+
+func (n *NotifChan) DeleteChan(id string) {
+	n.cmap.Delete(id)
+}
+
+func (n *NotifChan) ReadWholeChan(id string) []interface{} {
+	res := make([]interface{}, 0)
+	data, ok := n.WaitChanNonblockingNoDelete(id)
+	for ok {
+		res = append(res, data)
+		data, ok = n.WaitChanNonblockingNoDelete(id)
+	}
+	n.DeleteChan(id)
+	return res
 }

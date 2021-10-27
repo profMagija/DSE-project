@@ -6,8 +6,6 @@ import (
 	"errors"
 	"io"
 	"math/rand"
-	"regexp"
-	"time"
 
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
@@ -98,9 +96,10 @@ func (n *node) getCatalogRandomPeer(key string) (string, bool) {
 	}
 	
 	cur := ""
-	cn := 1
+	count := 0
 	for p := range m {
-		if rand.Intn(cn) == 0 {
+		count += 1
+		if rand.Intn(count) == 0 {
 			cur = p
 		}
 	}
@@ -121,12 +120,4 @@ func (n *node) UpdateCatalog(key string, peer string) {
 		n.catalog[key] = m
 	}
 	m[peer] = struct{}{}
-}
-
-func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) (names []string, err error) {
-	panic("Not implemented")
-}
-
-func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (name string, err error) {
-	panic("Not implemented")
 }
