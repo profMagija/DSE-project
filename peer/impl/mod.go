@@ -1,8 +1,15 @@
 package impl
 
 import (
+	"errors"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
+	"go.dedis.ch/cs438/types"
 )
 
 // NewPeer creates a new peer. You can change the content and location of this
@@ -10,7 +17,22 @@ import (
 func NewPeer(conf peer.Configuration) peer.Peer {
 	// here you must return a struct that implements the peer.Peer functions.
 	// Therefore, you are free to rename and change it as you want.
-	return &node{}
+	n := &node{
+		stopped: 0,
+		conf:    conf,
+		addr:    conf.Socket.GetAddress(),
+
+		rumourSeq: 0,
+
+		routeTable:  make(map[string]string),
+		status:      make(map[string]uint),
+		savedRumors: make(map[string][]types.Rumor),
+		ackChanMap:  make(map[string]chan struct{}),
+	}
+
+	n.routeTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
+
+	return n
 }
 
 // node implements a peer to build a Peerster system
@@ -18,36 +40,132 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 // - implements peer.Peer
 type node struct {
 	peer.Peer
-	// You probably want to keep the peer.Configuration on this struct:
-	//conf peer.Configuration
+
+	stopped uint64
+	conf    peer.Configuration
+	addr    string
+
+	rumourSeq uint64
+
+	statusLock  sync.RWMutex
+	status      map[string]uint
+	savedRumors map[string][]types.Rumor
+
+	routeMutex sync.RWMutex
+	routeTable map[string]string
+
+	ackChanLock sync.RWMutex
+	ackChanMap  map[string]chan struct{}
+}
+
+// Returns the current node address.
+func (n *node) Addr() string {
+	return n.addr
+}
+
+// Returns true if the node is running.
+func (n *node) IsRunning() bool {
+	return atomic.LoadUint64(&n.stopped) == 0
+}
+
+// Handles the given packet, if it is addressed to it.
+// Otherwise relays it further.
+// On error just logs it, does not panic.
+func (n *node) handlePacket(pkt transport.Packet) {
+	if pkt.Header.Destination == n.Addr() {
+		err := n.conf.MessageRegistry.ProcessPacket(pkt)
+		if err != nil {
+			log.Err(err).Msg("error processing packet")
+		}
+	} else {
+		err := n.relayPacket(pkt)
+		if err != nil {
+			log.Err(err).Msg("error relaying packet")
+		}
+	}
+}
+
+// The anti-entropy loop. Only call this if AntiEntropyInterval != 0. Just sends a status to a random peer.
+// Panics on all errors.
+func (n *node) antiEntropyLoop() {
+	for n.IsRunning() {
+		time.Sleep(n.conf.AntiEntropyInterval)
+
+		peer, ok := n.pickRandomPeer()
+		if !ok {
+			continue
+		}
+
+		err := n.sendStatusMessageTo(peer)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+// The heartbeat loop. Only call this if HeartbeatInterval != 0. Simply broadcasts an empty message every loop.
+// Panics on all errors.
+func (n *node) heartbeatLoop() {
+	for n.IsRunning() {
+		time.Sleep(n.conf.HeartbeatInterval)
+
+		empty := types.EmptyMessage{}
+
+		emptyMsg, err := n.conf.MessageRegistry.MarshalMessage(empty)
+		if err != nil {
+			panic(err)
+		}
+
+		err = n.Broadcast(emptyMsg)
+		if err != nil {
+			panic(err)
+		}
+	}
+}
+
+// The listener loop. Receives the packets, and spawns a handler goroutine.
+// Panics on all errors.
+func (n *node) listenerLoop() {
+	for n.IsRunning() {
+		pkt, err := n.conf.Socket.Recv(time.Second)
+		if errors.Is(err, transport.TimeoutErr(0)) {
+			continue
+		} else if err != nil {
+			panic(err)
+		}
+
+		go n.handlePacket(pkt)
+	}
 }
 
 // Start implements peer.Service
+//
+// Starts the listener loop, anti-entropy and heartbeat loops (if requested) and registers all the message handlers.
 func (n *node) Start() error {
-	panic("to be implemented in HW0")
+	go n.listenerLoop()
+
+	if n.conf.AntiEntropyInterval != 0 {
+		go n.antiEntropyLoop()
+	}
+
+	if n.conf.HeartbeatInterval != 0 {
+		go n.heartbeatLoop()
+	}
+
+	n.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.processChatMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.RumorsMessage{}, n.processRumorsMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.StatusMessage{}, n.processStatusMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.processAckMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.processPrivateMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(m types.Message, p transport.Packet) error { return nil })
+
+	return nil
 }
 
 // Stop implements peer.Service
+//
+// Stops the node by incrementing the `stopped` counter.
 func (n *node) Stop() error {
-	panic("to be implemented in HW0")
-}
-
-// Unicast implements peer.Messaging
-func (n *node) Unicast(dest string, msg transport.Message) error {
-	panic("to be implemented in HW0")
-}
-
-// AddPeer implements peer.Service
-func (n *node) AddPeer(addr ...string) {
-	panic("to be implemented in HW0")
-}
-
-// GetRoutingTable implements peer.Service
-func (n *node) GetRoutingTable() peer.RoutingTable {
-	panic("to be implemented in HW0")
-}
-
-// SetRoutingEntry implements peer.Service
-func (n *node) SetRoutingEntry(origin, relayAddr string) {
-	panic("to be implemented in HW0")
+	atomic.AddUint64(&n.stopped, 1)
+	return nil
 }
