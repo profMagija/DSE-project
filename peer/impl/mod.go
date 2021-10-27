@@ -28,6 +28,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		status:      make(map[string]uint),
 		savedRumors: make(map[string][]types.Rumor),
 		ackNotif:    NotifChan{},
+		catalog:     make(peer.Catalog),
 	}
 
 	n.routeTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
@@ -55,6 +56,9 @@ type node struct {
 	routeTable map[string]string
 
 	ackNotif NotifChan
+
+	cataLock sync.RWMutex
+	catalog  peer.Catalog
 }
 
 // Returns the current node address.
@@ -157,6 +161,8 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.AckMessage{}, n.processAckMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.PrivateMessage{}, n.processPrivateMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.EmptyMessage{}, func(m types.Message, p transport.Packet) error { return nil })
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataRequestMessage{}, n.processDataRequestMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.processDataReplyMessage)
 
 	return nil
 }

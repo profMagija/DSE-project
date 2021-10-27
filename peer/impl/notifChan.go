@@ -56,6 +56,19 @@ func (n *NotifChan) WaitChanTimeout(id string, timeout time.Duration) (v interfa
 	return
 }
 
+func (n *NotifChan) WaitChanNonblocking(id string) (v interface{}, ok bool) {
+	ch := n.getChan(id)
+	select {
+	case v = <- ch:
+		ok = true
+	default:
+		v = nil
+		ok = false
+	}
+	n.cmap.Delete(id)
+	return
+}
+
 func (n *NotifChan) WriteChan(id string, v interface{}) {
 	ch, ok := n.getChanOpt(id)
 	if ok {
