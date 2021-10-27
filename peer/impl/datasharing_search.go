@@ -13,6 +13,8 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// Process a SearchRequestMessage. Sends the file information back as a response,
+// as well as forwarding the request further.
 func (n *node) processSearchRequestMessage(msg types.Message, pkt transport.Packet) error {
 	log.Debug().Msgf("[%v] Processing searchRequest %v", n.Addr(), msg)
 	srm, ok := msg.(*types.SearchRequestMessage)
@@ -46,6 +48,8 @@ func (n *node) processSearchRequestMessage(msg types.Message, pkt transport.Pack
 	return nil
 }
 
+// Processes a SearchReplyMessage. Updates name store and the catalog. Writes all
+// response file infos to the corresponding channel.
 func (n *node) processSearchReplyMessage(msg types.Message, pkt transport.Packet) error {
 	log.Debug().Msgf("[%v] Processing searchReply %v", n.Addr(), msg)
 	srm, ok := msg.(*types.SearchReplyMessage)
@@ -62,13 +66,14 @@ func (n *node) processSearchReplyMessage(msg types.Message, pkt transport.Packet
 				n.UpdateCatalog(string(ch), pkt.Header.Source)
 			}
 		}
-		
+
 		n.searchNotif.WriteChan(srm.RequestID, resp)
 	}
 
 	return nil
 }
 
+// Sends the search response. The response is always sent directly to the relay.
 func (n *node) sendSearchResponse(origin, relay, rid string, fis []types.FileInfo) error {
 	log.Debug().Msgf("[%v] sending search resp to %v via %v", n.addr, origin, relay)
 	msg := types.SearchReplyMessage{
@@ -93,6 +98,8 @@ func (n *node) sendSearchResponse(origin, relay, rid string, fis []types.FileInf
 	return nil
 }
 
+// Returns if the file info is "fully known" by the sender
+// (has no nil-entry chunks)
 func fullyKnown(fi types.FileInfo) bool {
 	for _, r := range fi.Chunks {
 		if r == nil {
@@ -103,6 +110,7 @@ func fullyKnown(fi types.FileInfo) bool {
 	return true
 }
 
+// Constructs all the FileInfo-s the node knows about.
 func (n *node) constructFileInfos(reg regexp.Regexp) []types.FileInfo {
 	fis := make([]types.FileInfo, 0)
 	nstore := n.conf.Storage.GetNamingStore()
@@ -110,6 +118,7 @@ func (n *node) constructFileInfos(reg regexp.Regexp) []types.FileInfo {
 
 	nstore.ForEach(func(key string, val []byte) bool {
 		if !reg.Match([]byte(key)) {
+			// does not match the regex
 			return true
 		}
 
@@ -120,6 +129,7 @@ func (n *node) constructFileInfos(reg regexp.Regexp) []types.FileInfo {
 
 		metafileBytes := dstore.Get(string(val))
 		if metafileBytes == nil {
+			// we do not have the metafile
 			return true
 		}
 		metafile := string(metafileBytes)
@@ -139,6 +149,7 @@ func (n *node) constructFileInfos(reg regexp.Regexp) []types.FileInfo {
 	return fis
 }
 
+// Send the search request to peer.
 func (n *node) sendSearchRequest(peer string, budget uint, reg regexp.Regexp, origin, reqId string) error {
 	log.Debug().Msgf("[%v] sending search to %v (%d)", n.addr, peer, budget)
 	msg := types.SearchRequestMessage{
@@ -165,6 +176,7 @@ func (n *node) sendSearchRequest(peer string, budget uint, reg regexp.Regexp, or
 	return nil
 }
 
+// Get all the names in the local store that match the regexp.
 func (n *node) getNamesMatching(reg regexp.Regexp) []string {
 	names := make([]string, 0)
 	store := n.conf.Storage.GetNamingStore()
@@ -178,6 +190,9 @@ func (n *node) getNamesMatching(reg regexp.Regexp) []string {
 	return names
 }
 
+// "Scream" the search request to all neighbours (except the ones noted in "exceptPeer").
+// The `namer` is called before each request send, and should return the requestID.
+// Budget is divided equally among the peers.
 func (n *node) screamSearchRequest(origin string, budget uint, reg regexp.Regexp, namer func() string, exceptPeers ...string) error {
 	peers := n.getPeerPermutation(exceptPeers...)
 	remaining := uint(len(peers))
@@ -200,11 +215,14 @@ func (n *node) screamSearchRequest(origin string, budget uint, reg regexp.Regexp
 	return nil
 }
 
+// implements peer.DataSharing
 func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) ([]string, error) {
-
+	// perform local search
 	names := n.getNamesMatching(reg)
-	reqNames := make([]string, 0)
 
+	// Send the request to all neighbours. For each sent request, we
+	// create a new notification channel.
+	reqNames := make([]string, 0)
 	err := n.screamSearchRequest(n.addr, budget, reg, func() string {
 		name := xid.New().String()
 		reqNames = append(reqNames, name)
@@ -215,8 +233,11 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 		return nil, xerrors.Errorf("error screaming: %v", err)
 	}
 
+	// wait for all responses to be recv'd
 	time.Sleep(timeout)
 
+	// read all the data from each channel, and place the names into
+	// "names" array
 	for _, rn := range reqNames {
 		data := n.searchNotif.ReadWholeChan(rn)
 		for _, di := range data {
@@ -230,8 +251,9 @@ func (n *node) SearchAll(reg regexp.Regexp, budget uint, timeout time.Duration) 
 	return names, nil
 }
 
+// implements peer.DataSharing
 func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (name string, err error) {
-
+	// perform local search
 	fis := n.constructFileInfos(pattern)
 	for _, fi := range fis {
 		if fullyKnown(fi) {
@@ -239,26 +261,31 @@ func (n *node) SearchFirst(pattern regexp.Regexp, conf peer.ExpandingRing) (name
 		}
 	}
 
+	// the retry loop
 	budget := conf.Initial
 	for i := uint(0); i < conf.Retry; i++ {
 		reqName := xid.New().String()
 		n.searchNotif.CreateChanWithSize(reqName, 10)
+		// scream the search request to all neighbours
 		err := n.screamSearchRequest(n.addr, budget, pattern, func() string { return reqName })
 		if err != nil {
 			return "", xerrors.Errorf("error searching: %v", err)
 		}
-		
+
+		// wait for the responses to be received
 		time.Sleep(conf.Timeout)
-		
+
+		// read all responses
 		for _, res := range n.searchNotif.ReadWholeChan(reqName) {
 			fi := res.(types.FileInfo)
 			if fullyKnown(fi) {
 				return fi.Name, nil
 			}
 		}
-		
+
+		// we found nothing, retry
 		budget *= conf.Factor
 	}
-	
+
 	return "", nil
 }

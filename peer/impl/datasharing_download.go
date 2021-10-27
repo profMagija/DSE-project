@@ -12,6 +12,7 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// process a DataRequestMessage.
 func (n *node) processDataRequestMessage(msg types.Message, pkt transport.Packet) error {
 	log.Debug().Msgf("[%v] Processing dataRequest %v", n.Addr(), msg)
 	drm, ok := msg.(*types.DataRequestMessage)
@@ -36,6 +37,7 @@ func (n *node) processDataRequestMessage(msg types.Message, pkt transport.Packet
 	return nil
 }
 
+// Process a DataReplyMessage. Put the response into a corresponding channel.
 func (n *node) processDataReplyMessage(msg types.Message, pkt transport.Packet) error {
 	log.Debug().Msgf("[%v] Processing dataReply %v", n.Addr(), msg)
 	drm, ok := msg.(*types.DataReplyMessage)
@@ -46,6 +48,8 @@ func (n *node) processDataReplyMessage(msg types.Message, pkt transport.Packet) 
 	return nil
 }
 
+// Download a given chunk. Picks a random neighbour from the catalog,
+// and performs the exponential backoff.
 func (n *node) downloadChunk(key string) ([]byte, error) {
 	p, ok := n.getCatalogRandomPeer(key)
 	if !ok {
@@ -63,25 +67,33 @@ func (n *node) downloadChunk(key string) ([]byte, error) {
 		if err != nil {
 			return nil, xerrors.Errorf("error marshaling message: %v", err)
 		}
+		// create the response channel
 		n.ackNotif.CreateChan(rid)
+		// send the message
 		err = n.Unicast(p, trMsg)
 		if err != nil {
 			return nil, xerrors.Errorf("error sending request: %v", err)
 		}
+		// get the response
 		res, ok := n.ackNotif.WaitChanTimeout(rid, timeout)
 		if !ok {
+			// we did not get the response, retry
 			timeout = timeout * time.Duration(n.conf.BackoffDataRequest.Factor)
 			continue
 		}
 		if res == nil {
+			// we got an empty response
 			return nil, xerrors.Errorf("empty response")
 		}
+		// we got data
 		return res.([]byte), nil
 	}
 
+	// we failed enough times
 	return nil, xerrors.Errorf("no response")
 }
 
+// get a single chunk. Either queries local store, or calls "downloadChunk"
 func (n *node) getChunk(key string) ([]byte, error) {
 	val := n.conf.Storage.GetDataBlobStore().Get(key)
 	if val != nil {
@@ -96,6 +108,7 @@ func (n *node) getChunk(key string) ([]byte, error) {
 	return val, nil
 }
 
+// implements peer.DataSharing
 func (n *node) Download(metahash string) ([]byte, error) {
 	metafileb, err := n.getChunk(metahash)
 	if err != nil {

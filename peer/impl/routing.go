@@ -131,6 +131,7 @@ func (n *node) isPeer(addr string) bool {
 	return addr != n.Addr() && n.routeTable[addr] == addr
 }
 
+// Get all peers (except the ones in the arguments), in a random permutation.
 func (n *node) getPeerPermutation(except... string) []string {
 	n.routeMutex.RLock()
 	defer n.routeMutex.RUnlock()

@@ -12,6 +12,9 @@ import (
 	"golang.org/x/xerrors"
 )
 
+// Reads from `data` until `buf` is full, or EOF is reached.
+// If returned amount is less than the length of the buffer,
+// end is reached. Any non-EOF error is propagated.
 func readExact(data io.Reader, buf []byte) (int, error) {
 	total := 0
 	for total < len(buf) {
@@ -28,6 +31,8 @@ func readExact(data io.Reader, buf []byte) (int, error) {
 	return total, nil
 }
 
+// Hashes, and returns the hex-encoded as well as original
+// hash value
 func hashF(b []byte) (string, []byte) {
 	h := crypto.SHA256.New()
 	h.Write(b)
@@ -35,6 +40,7 @@ func hashF(b []byte) (string, []byte) {
 	return hex.EncodeToString(ms), ms
 }
 
+// implements peer.DataSharing
 func (n *node) Upload(data io.Reader) (metahash string, err error) {
 	log.Debug().Msgf("[%v] starting upload", n.addr)
 	store := n.conf.Storage.GetDataBlobStore()
@@ -70,12 +76,14 @@ func (n *node) Upload(data io.Reader) (metahash string, err error) {
 	return
 }
 
+// implements peer.DataSharing
 func (n *node) Tag(name string, mh string) error {
 	storage := n.conf.Storage.GetNamingStore()
 	storage.Set(name, []byte(mh))
 	return nil
 }
 
+// implements peer.DataSharing
 func (n *node) Resolve(name string) (metahash string) {
 	storage := n.conf.Storage.GetNamingStore()
 	v := storage.Get(name)
@@ -86,6 +94,7 @@ func (n *node) Resolve(name string) (metahash string) {
 	}
 }
 
+// get a random peer from the catalog that contains the given hash
 func (n *node) getCatalogRandomPeer(key string) (string, bool) {
 	n.cataLock.RLock()
 	defer n.cataLock.RUnlock()
@@ -106,10 +115,12 @@ func (n *node) getCatalogRandomPeer(key string) (string, bool) {
 	return cur, true
 }
 
+// implements peer.DataSharing
 func (n *node) GetCatalog() peer.Catalog {
 	return n.catalog
 }
 
+// implements peer.DataSharing
 func (n *node) UpdateCatalog(key string, peer string) {
 	n.cataLock.Lock()
 	defer n.cataLock.Unlock()
