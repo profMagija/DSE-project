@@ -123,6 +123,28 @@ func (n *node) pickRandomPeer(except ...string) (string, bool) {
 	return cur, count > 0
 }
 
+// Same as above, but for the bubble graph table
+// lock specifies whether the mutex has to be locked
+func (n *node) pickRandomBubblePeer(lock bool, except ...string) (string, bool) {
+	if lock {
+		n.bubbleMutex.RLock()
+		defer n.bubbleMutex.RUnlock()
+	}
+
+	cur := ""
+	count := 0
+	for relay := range n.bubbleTable {
+		if !memberOf(relay, except) {
+			count += 1
+			if rand.Intn(count) == 0 {
+				cur = relay
+			}
+		}
+	}
+
+	return cur, count > 0
+}
+
 // Returns true if the given address is a peer (because routeTable[addr] == addr).
 // The node is never its own peer.
 func (n *node) isPeer(addr string) bool {
@@ -132,22 +154,22 @@ func (n *node) isPeer(addr string) bool {
 }
 
 // Get all peers (except the ones in the arguments), in a random permutation.
-func (n *node) getPeerPermutation(except... string) []string {
+func (n *node) getPeerPermutation(except ...string) []string {
 	n.routeMutex.RLock()
 	defer n.routeMutex.RUnlock()
-	
+
 	res := make([]string, 0)
 	for relay, p := range n.routeTable {
 		if p != n.addr && relay == p && !memberOf(p, except) {
 			res = append(res, p)
 		}
 	}
-	
+
 	rand.Shuffle(len(res), func(i, j int) {
 		tmp := res[i]
 		res[i] = res[j]
 		res[j] = tmp
-	});
-	
+	})
+
 	return res
 }

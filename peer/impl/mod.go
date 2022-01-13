@@ -27,6 +27,7 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		routeTable:  make(map[string]string),
 		status:      make(map[string]uint),
 		savedRumors: make(map[string][]types.Rumor),
+		bubbleTable: make(map[string]struct{}),
 		ackNotif:    NotifChan{},
 		catalog:     make(peer.Catalog),
 	}
@@ -54,6 +55,9 @@ type node struct {
 
 	routeMutex sync.RWMutex
 	routeTable map[string]string
+
+	bubbleMutex sync.RWMutex
+	bubbleTable map[string]struct{}
 
 	ackNotif    NotifChan
 	searchNotif NotifChan
