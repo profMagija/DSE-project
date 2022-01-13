@@ -133,6 +133,30 @@ func (n *node) heartbeatLoop() {
 	}
 }
 
+// The bubble graph loop. Only call this if BubbleGraphTimeout != 0.
+// Periodically sends SplitEdgeMessages in order to reach BubbleGraphDegree neighbors.
+// Panics on all errors.
+func (n *node) bubbleGraphLoop() {
+	for n.IsRunning() {
+		time.Sleep(n.conf.BubbleGraphTimeout)
+
+		n.bubbleMutex.RLock()
+		current := len(n.bubbleTable)
+		n.bubbleMutex.RUnlock()
+
+		for i := current; i < int(n.conf.BubbleGraphDegree); i++ {
+			peer, ok := n.pickRandomBubblePeer(false)
+			if !ok {
+				continue
+			}
+			err := n.SendSplitEdge(n.Addr(), peer, n.conf.BubbleGraphTTL)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 // The listener loop. Receives the packets, and spawns a handler goroutine.
 // Panics on all errors.
 func (n *node) listenerLoop() {
@@ -160,6 +184,10 @@ func (n *node) Start() error {
 
 	if n.conf.HeartbeatInterval != 0 {
 		go n.heartbeatLoop()
+	}
+
+	if n.conf.BubbleGraphTimeout != 0 {
+		go n.bubbleGraphLoop()
 	}
 
 	n.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.processChatMessage)

@@ -125,9 +125,17 @@ func (n *node) processConnectionNopeMessage(msg types.Message, pkt transport.Pac
 
 	delete(n.bubbleTable, pkt.Header.Source)
 
-	return nil
+	// we know that we are missing some edges, so send a SplitEdgeMessage to speed up
+	// the building process (not have to wait for BubbleGraphLoop)
+	peer, ok := n.pickRandomPeer()
+	if !ok {
+		return nil
+	}
+
+	return n.SendSplitEdge(n.Addr(), peer, n.conf.BubbleGraphTTL)
 }
 
+// Send a SplitEdgeMessage, from the given source, to the given dest, with the given TTL.
 func (n *node) SendSplitEdge(source, dest string, TTL uint) error {
 	log.Debug().Msgf("[%v] sending split edge message from %v to %v", n.addr, source, dest)
 	msg := types.SplitEdgeMessage{
