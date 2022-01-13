@@ -57,7 +57,7 @@ type node struct {
 
 	ackNotif    NotifChan
 	searchNotif NotifChan
-	
+
 	searchDedup sync.Map
 
 	cataLock sync.RWMutex
@@ -168,6 +168,10 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.processDataReplyMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.processSearchRequestMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.processSearchReplyMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.SplitEdgeMessage{}, n.processSplitEdgeMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.RedirectMessage{}, n.processRedirectMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.ConnectionHelloMessage{}, n.processConnectionHelloMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.ConnectionNopeMessage{}, n.processConnectionNopeMessage)
 
 	return nil
 }

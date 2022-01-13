@@ -1,10 +1,11 @@
 package peer
 
 import (
+	"time"
+
 	"go.dedis.ch/cs438/registry"
 	"go.dedis.ch/cs438/storage"
 	"go.dedis.ch/cs438/transport"
-	"time"
 )
 
 // Peer defines the interface of a peer in the Peerster system. It embeds all
@@ -60,6 +61,10 @@ type Configuration struct {
 	BackoffDataRequest Backoff
 
 	Storage storage.Storage
+
+	BubbleGraphDegree  uint
+	BubbleGraphTTL     uint
+	BubbleGraphTimeout time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must
