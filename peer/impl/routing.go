@@ -153,14 +153,14 @@ func (n *node) isPeer(addr string) bool {
 	return addr != n.Addr() && n.routeTable[addr] == addr
 }
 
-// Get all peers (except the ones in the arguments), in a random permutation.
-func (n *node) getPeerPermutation(except ...string) []string {
-	n.routeMutex.RLock()
-	defer n.routeMutex.RUnlock()
+// Get all bubble peers (except the ones in the arguments), in a random permutation.
+func (n *node) getBubblePeerPermutation(except ...string) []string {
+	n.bubbleMutex.RLock()
+	defer n.bubbleMutex.RUnlock()
 
 	res := make([]string, 0)
-	for relay, p := range n.routeTable {
-		if p != n.addr && relay == p && !memberOf(p, except) {
+	for p := range n.bubbleTable {
+		if !memberOf(p, except) {
 			res = append(res, p)
 		}
 	}

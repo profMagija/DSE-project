@@ -8,16 +8,28 @@ import (
 )
 
 func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing SplitEdge %v", n.Addr(), msg)
 	sem := msg.(*types.SplitEdgeMessage)
 
-	if sem.TTL > 0 {
+	addr, ok := n.pickRandomPeer(pkt.Header.RelayedBy, pkt.Header.Source)
+	if sem.TTL > 0 && ok {
 		// transfer the message to a random neighbor
-		addr, ok := n.pickRandomPeer(pkt.Header.RelayedBy, pkt.Header.Source)
+		return n.SendSplitEdge(pkt.Header.Source, addr, sem.TTL-1)
+	}
+	// if there no other neighbors than the sender and the relayer,
+	// we are the receiver of the split edge
+
+	// we are the source: resend a split message if possible
+	// or just ignore
+	if pkt.Header.Source == n.Addr() {
 		if ok {
-			return n.SendSplitEdge(pkt.Header.Source, addr, sem.TTL-1)
+			err := n.SendSplitEdge(n.Addr(), addr, n.conf.BubbleGraphTTL)
+			if err != nil {
+				return err
+			}
 		}
-		// if there no other neighbors than the sender and the relayer,
-		// we are the receiver of the split edge
+
+		return nil
 	}
 
 	n.bubbleMutex.Lock()
@@ -29,7 +41,7 @@ func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) 
 		return xerrors.Errorf("error marshaling message: %v", err)
 	}
 
-	_, ok := n.bubbleTable[pkt.Header.Source]
+	_, ok = n.bubbleTable[pkt.Header.Source]
 
 	// if the source is already a neighbor, send a hello to ensure synchronization
 	// if we're not at the desired degree, just add the edge
@@ -44,7 +56,7 @@ func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) 
 	}
 
 	// at this point we know that there are BubbleGraphDegree elements in BubbleTable
-	addr, _ := n.pickRandomBubblePeer(false)
+	addr, _ = n.pickRandomBubblePeer(false)
 
 	// send redirect message to the selected former edge
 	redirMsg := types.RedirectMessage{Split: pkt.Header.Source}
@@ -69,12 +81,22 @@ func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) 
 }
 
 func (n *node) processRedirectMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing Redirect %v", n.Addr(), msg)
 	redir := msg.(*types.RedirectMessage)
 
 	n.bubbleMutex.Lock()
 	defer n.bubbleMutex.Unlock()
 
+	_, ok := n.bubbleTable[pkt.Header.Source]
+	if !ok && len(n.bubbleTable) == int(n.conf.BubbleGraphDegree) {
+		// the sender was not a neighbor, and we're full, so ignore the message
+		return nil
+	}
+
 	delete(n.bubbleTable, pkt.Header.Source)
+	if n.Addr() == redir.Split {
+		return nil
+	}
 
 	helloMsg := types.ConnectionHelloMessage{}
 	connHellomsg, err := n.conf.MessageRegistry.MarshalMessage(helloMsg)
@@ -92,6 +114,8 @@ func (n *node) processRedirectMessage(msg types.Message, pkt transport.Packet) e
 }
 
 func (n *node) processConnectionHelloMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing ConnectionHello %v", n.Addr(), msg)
+
 	n.bubbleMutex.Lock()
 	defer n.bubbleMutex.Unlock()
 
@@ -120,6 +144,8 @@ func (n *node) processConnectionHelloMessage(msg types.Message, pkt transport.Pa
 }
 
 func (n *node) processConnectionNopeMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing ConnectionNope %v", n.Addr(), msg)
+
 	n.bubbleMutex.Lock()
 	defer n.bubbleMutex.Unlock()
 
