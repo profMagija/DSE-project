@@ -53,11 +53,11 @@ func (wd *Watchdog) Start(timeout time.Duration) {
 }
 
 func (wd *Watchdog) Update() {
-	wd.sendUpdate(false)
+	go wd.sendUpdate(false)
 }
 
 func (wd *Watchdog) Stop() {
-	wd.sendUpdate(true)
+	go wd.sendUpdate(true)
 }
 
 func (wd *Watchdog) sendUpdate(value bool) {

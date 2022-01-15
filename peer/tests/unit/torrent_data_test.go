@@ -1,9 +1,11 @@
 package unit
 
 import (
+	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
 	"go.dedis.ch/cs438/transport/channel"
@@ -71,7 +73,7 @@ func Test_Torrent_Data_Download_Three_Nodes(t *testing.T) {
 	defer node2.Stop()
 
 	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
-	defer node2.Stop()
+	defer node3.Stop()
 
 	fileContents := [][]byte{{'a', 'a', 'a'}, {'b', 'b', 'b'}, {'c', 'c', 'c'}}
 
@@ -95,10 +97,107 @@ func Test_Torrent_Data_Download_Three_Nodes(t *testing.T) {
 	require.Equal(t, fileContents, node1.GetFileParts("abc"))
 	require.Equal(t, fileContents, node2.GetFileParts("abc"))
 	require.Equal(t, fileContents, node3.GetFileParts("abc"))
-	
+
 	df := node1.GetDownloadingFrom("abc")
 	require.Len(t, df, 2)
 	require.Contains(t, df, node2.GetAddr())
 	require.Contains(t, df, node3.GetAddr())
+
+}
+
+func Test_Torrent_Data_Download_Perf(t *testing.T) {
+
+	util := func(NUM_NODES, NUM_CONNS, NUM_BLOCKS int) {
+		transp := channel.NewTransport()
+
+		BLOCK_SIZE := 16
+
+		var nodes []z.TestNode
+		for i := 0; i < NUM_NODES; i++ {
+			nodes = append(nodes, z.NewTestNode(t, peerFac, transp, "127.0.0.1:0"))
+			defer nodes[i].Stop()
+
+			if i < NUM_CONNS {
+				for j := 0; j < i; j++ {
+					nodes[i].AddPeer(nodes[j].GetAddr())
+					nodes[j].AddPeer(nodes[i].GetAddr())
+
+					// log.Debug().Msgf("%d <-> %d", i, j)
+				}
+			} else {
+				for j := 0; j < NUM_CONNS; j++ {
+					k := rand.Intn(i)
+					nodes[i].AddPeer(nodes[k].GetAddr())
+					nodes[k].AddPeer(nodes[i].GetAddr())
+					// log.Debug().Msgf("%d <-> %d", i, k)
+				}
+			}
+		}
+
+		var fileData [][]byte
+
+		for i := 0; i < NUM_BLOCKS; i++ {
+			block := make([]byte, BLOCK_SIZE)
+			fileData = append(fileData, block)
+		}
+
+		originator := rand.Intn(NUM_NODES)
+
+		err := nodes[originator].UploadFile("abc", fileData)
+		require.NoError(t, err)
+
+		startTimes := make([]time.Time, NUM_NODES)
+		for i := range nodes {
+			if i == originator {
+				continue
+			}
+			startTimes[i] = time.Now()
+			err = nodes[i].StartTorrent("abc")
+			require.NoError(t, err)
+		}
+
+		allFinished := false
+		for !allFinished {
+			time.Sleep(300 * time.Millisecond)
+			allFinished = true
+			for i := range nodes {
+				if nodes[i].GetFinishTime("abc").Before(startTimes[i]) {
+					allFinished = false
+					break
+				}
+			}
+		}
+
+		sum := 0 * time.Second
+		count := 0
+
+		for i := range nodes {
+			if i == originator {
+				continue
+			}
+			endTime := nodes[i].GetFinishTime("abc")
+			dur := endTime.Sub(startTimes[i])
+
+			if dur > 0 {
+				sum += dur
+				count += 1
+			}
+		}
+
+		log.Debug().Msgf("RESULT: %d,%d,%d,%d", NUM_NODES, NUM_CONNS, NUM_BLOCKS, sum.Nanoseconds()/int64(count))
+	}
+
+	// for _, numNodes := range [...]int{8, 16, 32, 48, 64, 80} {
+	// 	for i := 0; i < 15; i++ {
+	// 		util(numNodes, 3, 16)
+	// 	}
+	// }
+	
+	// for _, numConns := range [...]int{3, 5, 10, 15, 20} {
+	// 	for i := 0; i < 15; i++ {
+	// 		util(48, numConns, 16)
+	// 	}
+	// }
+	
 
 }
