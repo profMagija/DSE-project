@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
@@ -178,7 +179,7 @@ func (n *node) listenerLoop() {
 func (n *node) Start() error {
 	go n.listenerLoop()
 
-	// zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 
 	if n.conf.AntiEntropyInterval != 0 {
 		go n.antiEntropyLoop()
