@@ -5,6 +5,6 @@ type Torrent interface {
 	GetDownloadingFrom(fileID string) []string
 
 	UploadFile(fileID string, parts [][]byte) error
-	
+
 	GetFileParts(fileID string) [][]byte
 }
