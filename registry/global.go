@@ -29,6 +29,8 @@ func init() {
 	GlobalRegistry.Add(types.DataQueryResponse{})
 	GlobalRegistry.Add(types.DataDownloadRequest{})
 	GlobalRegistry.Add(types.DataDownloadResponse{})
+	GlobalRegistry.Add(types.PeerDiscoveryRequest{})
+	GlobalRegistry.Add(types.PeerDiscoveryResponse{})
 }
 
 type globalRegistry struct {

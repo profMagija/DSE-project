@@ -3,9 +3,9 @@ package impl
 import (
 	"crypto/sha1"
 	"math"
+	"math/rand"
 	"time"
 
-	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
@@ -13,10 +13,19 @@ import (
 )
 
 func (n *node) StartTorrent(fileID string) error {
-	reqId := xid.New().String()
-	budget := 100
 
-	go n.screamInitialSearch(reqId, uint(budget), fileID, n.Addr())
+	psm := types.InitialPeerSearchMessage{
+		FileID:     fileID,
+		Originator: n.addr,
+	}
+	msg, err := n.conf.MessageRegistry.MarshalMessage(psm)
+	if err != nil {
+		return xerrors.Errorf("error marshaling search: %v", err)
+	}
+	err = n.Broadcast(msg)
+	if err != nil {
+		return xerrors.Errorf("error broadcasting search: %v", err)
+	}
 
 	return nil
 }
@@ -39,36 +48,6 @@ func (n *node) GetDownloadingFrom(fileID string) []string {
 	return res
 }
 
-func (n *node) screamInitialSearch(requestID string, budget uint, fileID, originator string, except ...string) error {
-	peers := n.getPeerPermutation(except...) // all peers except the one we just got the message from
-	remaining := uint(len(peers))
-	for _, p := range peers {
-		sendBudget := budget / remaining
-		remaining--
-		if sendBudget == 0 {
-			continue
-		}
-
-		budget -= sendBudget
-
-		msg, err := n.conf.MessageRegistry.MarshalMessage(&types.InitialPeerSearchMessage{
-			RequestID:  requestID,
-			Budget:     sendBudget,
-			FileID:     fileID,
-			Originator: originator,
-		})
-		if err != nil {
-			return xerrors.Errorf("error marshaling search: %v", err)
-		}
-		err = n.Unicast(p, msg)
-		if err != nil {
-			return xerrors.Errorf("error sending search: %v", err)
-		}
-	}
-
-	return nil
-}
-
 func (n *node) processInitialPeerSearchMessage(msg types.Message, pkt transport.Packet) error {
 	log.Debug().Msgf("[%v] Processing initialPeerSearch %v", n.Addr(), msg)
 	ipsm, ok := msg.(*types.InitialPeerSearchMessage)
@@ -76,8 +55,11 @@ func (n *node) processInitialPeerSearchMessage(msg types.Message, pkt transport.
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
 
+	n.SetRoutingEntry(ipsm.Originator, pkt.Header.RelayedBy)
+
 	_, hasCatalog := n.torrentDataParts[ipsm.FileID]
 	if hasCatalog {
+		log.Debug().Msgf("[%s] We have %s", n.addr, ipsm.FileID)
 		// we have this file, reply!
 		msg, err := n.conf.MessageRegistry.MarshalMessage(&types.InitialPeerResponseMessage{
 			RequestID: ipsm.RequestID,
@@ -91,18 +73,11 @@ func (n *node) processInitialPeerSearchMessage(msg types.Message, pkt transport.
 		if err != nil {
 			return xerrors.Errorf("error sending response: %v", err)
 		}
-		return nil
+	} else {
+		// we do not have this file
+		log.Debug().Msgf("[%s] We do not have %s", n.addr, ipsm.FileID)
 	}
-
-	// we do not have this file
-
-	return n.screamInitialSearch(
-		ipsm.RequestID,
-		ipsm.Budget-1,
-		ipsm.FileID,
-		ipsm.Originator,
-		pkt.Header.Source,
-	)
+	return nil
 }
 
 func (n *node) processInitialPeerResponseMessage(msg types.Message, pkt transport.Packet) error {
@@ -123,7 +98,6 @@ func (n *node) processInitialPeerResponseMessage(msg types.Message, pkt transpor
 	}
 
 	n.torrentPeers[iprm.FileID] = make(map[string]struct{})
-	n.torrentPeers[iprm.FileID][pkt.Header.Source] = struct{}{}
 
 	n.initializeDownload(iprm.FileID, pkt.Header.Source, iprm.NumParts)
 
@@ -140,9 +114,122 @@ func (n *node) initializeDownload(fileID, firstPeer string, numParts uint) {
 		part.Availability = make(map[string]struct{})
 	}
 	n.torrentDataParts[fileID] = parts
+
+	go n.peerDiscoveryLoop(fileID)
+}
+
+func (n *node) getRandomFilePeer(fileID string) (string, bool) {
+	if len(n.torrentPeers[fileID]) == 0 {
+		return "", false
+	}
+
+	peers := make([]string, 0, len(n.torrentPeers[fileID]))
+	for k := range n.torrentPeers[fileID] {
+		peers = append(peers, k)
+	}
+
+	i := rand.Intn(len(peers))
+	return peers[i], true
+}
+
+func (n *node) peerDiscoveryLoop(fileID string) {
+	for len(n.torrentPeers) < 5 {
+
+		time.Sleep(100 * time.Millisecond)
+
+		randPeer, ok := n.getRandomFilePeer(fileID)
+		if !ok {
+			continue
+		}
+
+		pdr := &types.PeerDiscoveryRequest{
+			FileID:     fileID,
+			Originator: n.addr,
+			TTL:        32,
+		}
+		pdrMsg, err := n.conf.MessageRegistry.MarshalMessage(pdr)
+		if err != nil {
+			panic(err)
+		}
+		err = n.Unicast(randPeer, pdrMsg)
+		if err != nil {
+			panic(err)
+		}
+
+	}
+}
+
+func (n *node) processPeerDiscoveryRequestMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing PeerDiscoveryRequest %v", n.Addr(), msg)
+	pdr, ok := msg.(*types.PeerDiscoveryRequest)
+	if !ok {
+		return xerrors.Errorf("wrong type: %T", msg)
+	}
+
+	n.SetRoutingEntry(pdr.Originator, pkt.Header.RelayedBy)
+
+	ttl := pdr.TTL - 1
+
+	if ttl != 0 {
+		randPeer, ok := n.getRandomFilePeer(pdr.FileID)
+		if !ok {
+			return nil
+		}
+
+		pdr2 := &types.PeerDiscoveryRequest{
+			FileID:     pdr.FileID,
+			Originator: pdr.Originator,
+			TTL:        ttl,
+		}
+		pdrMsg, err := n.conf.MessageRegistry.MarshalMessage(pdr2)
+		if err != nil {
+			return xerrors.Errorf("error marshaling forward: %v", err)
+		}
+		err = n.Unicast(randPeer, pdrMsg)
+		if err != nil {
+			return xerrors.Errorf("error sending forward: %v", err)
+		}
+	} else {
+		pdr2 := &types.PeerDiscoveryResponse{
+			FileID: pdr.FileID,
+		}
+		pdrMsg, err := n.conf.MessageRegistry.MarshalMessage(pdr2)
+		if err != nil {
+			return xerrors.Errorf("error marshaling response: %v", err)
+		}
+		err = n.Unicast(pdr.Originator, pdrMsg)
+		if err != nil {
+			return xerrors.Errorf("error sending response: %v", err)
+		}
+	}
+
+	return nil
+}
+
+func (n *node) processPeerDiscoveryResponseMessage(msg types.Message, pkt transport.Packet) error {
+	log.Debug().Msgf("[%v] Processing PeerDiscoveryResponse %v", n.Addr(), msg)
+	pdr, ok := msg.(*types.PeerDiscoveryResponse)
+	if !ok {
+		return xerrors.Errorf("wrong type: %T", msg)
+	}
+
+	n.SetRoutingEntry(pkt.Header.Source, pkt.Header.RelayedBy)
+
+	go n.startDownloadingFrom(pdr.FileID, pkt.Header.Source)
+
+	return nil
 }
 
 func (n *node) startDownloadingFrom(fileID, peer string) {
+	if peer == n.addr {
+		return
+	}
+	if _, ok := n.torrentPeers[fileID][peer]; ok {
+		log.Debug().Msgf("[%s] Already downloading %s from %s", n.addr, fileID, peer)
+		return
+	}
+	log.Debug().Msgf("[%s] Starting to download %s from %s", n.addr, fileID, peer)
+	n.torrentPeers[fileID][peer] = struct{}{}
 	for {
 		wd := NewWatchdog()
 		n.torrentPeerWd[fileID][peer] = wd
@@ -181,6 +268,11 @@ func (n *node) processDataQueryRequestMessage(msg types.Message, pkt transport.P
 	dqr, ok := msg.(*types.DataQueryRequest)
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
+	}
+
+	_, hasPeer := n.torrentPeers[pkt.Header.Source][pkt.Header.Source]
+	if !hasPeer {
+		go n.startDownloadingFrom(dqr.FileID, pkt.Header.Source)
 	}
 
 	pts, hasPts := n.torrentDataParts[dqr.FileID]
@@ -347,7 +439,7 @@ func (n *node) processDataDownloadResponse(msg types.Message, pkt transport.Pack
 
 func (n *node) UploadFile(fileID string, parts [][]byte) error {
 	r := make([]TorrentDataPart, len(parts))
-	
+
 	log.Debug().Msgf("[%v] Uploading file %s of %d parts", n.addr, fileID, len(parts))
 
 	for i, part := range parts {
@@ -364,6 +456,8 @@ func (n *node) UploadFile(fileID string, parts [][]byte) error {
 	}
 
 	n.torrentDataParts[fileID] = r
+	n.torrentPeers[fileID] = make(map[string]struct{})
+	n.torrentPeerWd[fileID] = make(map[string]*Watchdog)
 
 	return nil
 }

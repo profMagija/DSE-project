@@ -52,7 +52,8 @@ func (reg registryctrl) PktNotifyHandler() http.HandlerFunc {
 }
 
 func (reg registryctrl) messagesGet(w http.ResponseWriter, r *http.Request) {
-	messages := reg.registry.GetMessages()
+	// messages := reg.registry.GetMessages()
+	var messages []types.Message
 
 	transpMsgs := make([]transport.Message, len(messages))
 
@@ -88,7 +89,7 @@ func (reg registryctrl) pktNotifyGet(w http.ResponseWriter, r *http.Request) {
 	pkts := make(chan transport.Packet, 100)
 
 	reg.registry.RegisterNotify(func(msg types.Message, p transport.Packet) error {
-		pkts <- p
+		// pkts <- p
 		return nil
 	})
 

@@ -191,6 +191,8 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataQueryResponse{}, n.processDataQueryResponseMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataDownloadRequest{}, n.processDataDownloadRequest)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataDownloadResponse{}, n.processDataDownloadResponse)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.PeerDiscoveryRequest{}, n.processPeerDiscoveryRequestMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.PeerDiscoveryResponse{}, n.processPeerDiscoveryResponseMessage)
 
 	return nil
 }

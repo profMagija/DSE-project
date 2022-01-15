@@ -35,6 +35,16 @@ type DataDownloadResponse struct {
 	Data   []byte
 }
 
+type PeerDiscoveryRequest struct {
+	FileID string
+	Originator string
+	TTL uint
+}
+
+type PeerDiscoveryResponse struct {
+	FileID string
+}
+
 // NewEmpty implements types.Message.
 func (d InitialPeerSearchMessage) NewEmpty() Message {
 	return &InitialPeerSearchMessage{}
@@ -152,5 +162,46 @@ func (d DataDownloadResponse) String() string {
 
 // HTML implements types.Message.
 func (d DataDownloadResponse) HTML() string {
+	return d.String()
+}
+
+
+// NewEmpty implements types.Message.
+func (d PeerDiscoveryRequest) NewEmpty() Message {
+	return &PeerDiscoveryRequest{}
+}
+
+// Name implements types.Message.
+func (d PeerDiscoveryRequest) Name() string {
+	return "PeerDiscoveryrequest"
+}
+
+// String implements types.Message.
+func (d PeerDiscoveryRequest) String() string {
+	return fmt.Sprintf("PeerDiscoveryrequest{file:%s, origin:%s, ttl:%d}", d.FileID, d.Originator, d.TTL)
+}
+
+// HTML implements types.Message.
+func (d PeerDiscoveryRequest) HTML() string {
+	return d.String()
+}
+
+// NewEmpty implements types.Message.
+func (d PeerDiscoveryResponse) NewEmpty() Message {
+	return &PeerDiscoveryResponse{}
+}
+
+// Name implements types.Message.
+func (d PeerDiscoveryResponse) Name() string {
+	return "PeerDiscoveryresponse"
+}
+
+// String implements types.Message.
+func (d PeerDiscoveryResponse) String() string {
+	return fmt.Sprintf("PeerDiscoveryresponse{file:%s}", d.FileID)
+}
+
+// HTML implements types.Message.
+func (d PeerDiscoveryResponse) HTML() string {
 	return d.String()
 }

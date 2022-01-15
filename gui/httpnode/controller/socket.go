@@ -55,7 +55,8 @@ func (s socketctrl) AddressHandler() http.HandlerFunc {
 }
 
 func (s socketctrl) insGet(w http.ResponseWriter, r *http.Request) {
-	ins := s.socket.GetIns()
+	// ins := s.socket.GetIns()
+	var ins []transport.Packet
 
 	buf, err := json.Marshal(&ins)
 	if err != nil {
@@ -67,7 +68,8 @@ func (s socketctrl) insGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s socketctrl) outsGet(w http.ResponseWriter, r *http.Request) {
-	outs := s.socket.GetOuts()
+	// outs := s.socket.GetOuts()
+	var outs []transport.Packet
 
 	buf, err := json.Marshal(&outs)
 	if err != nil {
