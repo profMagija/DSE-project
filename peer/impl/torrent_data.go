@@ -340,13 +340,15 @@ func (n *node) processDataDownloadResponse(msg types.Message, pkt transport.Pack
 	pts[ddr.PartID].Data = ddr.Data
 	pts[ddr.PartID].Downloading = ""
 
-	log.Debug().Msgf("[%s] *** GOT %s[%d] : %v YAY !! ", n.addr, ddr.FileID, ddr.PartID, pts[ddr.PartID].Data)
+	log.Debug().Msgf("[%s] *** GOT %s[%d] YAY !! ", n.addr, ddr.FileID, ddr.PartID)
 
 	return nil
 }
 
 func (n *node) UploadFile(fileID string, parts [][]byte) error {
 	r := make([]TorrentDataPart, len(parts))
+	
+	log.Debug().Msgf("[%v] Uploading file %s of %d parts", n.addr, fileID, len(parts))
 
 	for i, part := range parts {
 		r[i] = TorrentDataPart{
@@ -360,7 +362,6 @@ func (n *node) UploadFile(fileID string, parts [][]byte) error {
 			},
 		}
 	}
-	n.UpdateCatalog(fileID, n.addr)
 
 	n.torrentDataParts[fileID] = r
 

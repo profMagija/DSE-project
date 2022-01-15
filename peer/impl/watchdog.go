@@ -1,12 +1,10 @@
 package impl
 
 import (
-	"sync"
 	"time"
 )
 
 type Watchdog struct {
-	l       sync.Mutex
 	resetCh chan bool
 	deadCh  chan bool
 }
