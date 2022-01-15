@@ -145,7 +145,7 @@ func (n *node) bubbleGraphLoop() {
 		n.bubbleMutex.RUnlock()
 
 		for i := current; i < int(n.conf.BubbleGraphDegree); i++ {
-			peer, ok := n.pickRandomBubblePeer(false)
+			peer, ok := n.pickRandomPeer()
 			if !ok {
 				continue
 			}
@@ -177,6 +177,8 @@ func (n *node) listenerLoop() {
 // Starts the listener loop, anti-entropy and heartbeat loops (if requested) and registers all the message handlers.
 func (n *node) Start() error {
 	go n.listenerLoop()
+
+	// zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 
 	if n.conf.AntiEntropyInterval != 0 {
 		go n.antiEntropyLoop()

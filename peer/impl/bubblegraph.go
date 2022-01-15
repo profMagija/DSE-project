@@ -46,7 +46,11 @@ func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) 
 	// if the source is already a neighbor, send a hello to ensure synchronization
 	// if we're not at the desired degree, just add the edge
 	if ok || len(n.bubbleTable) != int(n.conf.BubbleGraphDegree) {
-		err = n.Unicast(pkt.Header.Source, connHellomsg)
+		hdr := transport.NewHeader(n.Addr(), n.Addr(), pkt.Header.Source, 0)
+		err = n.conf.Socket.Send(pkt.Header.Source, transport.Packet{
+			Msg:    &connHellomsg,
+			Header: &hdr,
+		}, 0)
 		if err != nil {
 			return xerrors.Errorf("error sending a connection hello: %v", err)
 		}
@@ -64,14 +68,23 @@ func (n *node) processSplitEdgeMessage(msg types.Message, pkt transport.Packet) 
 	if err != nil {
 		return xerrors.Errorf("error marshaling message: %v", err)
 	}
-	err = n.Unicast(addr, connRedirMsg)
+
+	hdr := transport.NewHeader(n.Addr(), n.Addr(), addr, 0)
+	err = n.conf.Socket.Send(addr, transport.Packet{
+		Msg:    &connRedirMsg,
+		Header: &hdr,
+	}, 0)
 	if err != nil {
 		return xerrors.Errorf("error sending a redirect: %v", err)
 	}
 	delete(n.bubbleTable, addr)
 
 	// and send a hello to the source
-	err = n.Unicast(pkt.Header.Source, connHellomsg)
+	hdr = transport.NewHeader(n.Addr(), n.Addr(), pkt.Header.Source, 0)
+	err = n.conf.Socket.Send(pkt.Header.Source, transport.Packet{
+		Msg:    &connHellomsg,
+		Header: &hdr,
+	}, 0)
 	if err != nil {
 		return xerrors.Errorf("error sending a connection hello: %v", err)
 	}
@@ -104,7 +117,11 @@ func (n *node) processRedirectMessage(msg types.Message, pkt transport.Packet) e
 		return xerrors.Errorf("error marshaling message: %v", err)
 	}
 
-	err = n.Unicast(redir.Split, connHellomsg)
+	hdr := transport.NewHeader(n.Addr(), n.Addr(), redir.Split, 0)
+	err = n.conf.Socket.Send(redir.Split, transport.Packet{
+		Msg:    &connHellomsg,
+		Header: &hdr,
+	}, 0)
 	if err != nil {
 		return xerrors.Errorf("error sending a connection hello: %v", err)
 	}
@@ -135,7 +152,12 @@ func (n *node) processConnectionHelloMessage(msg types.Message, pkt transport.Pa
 	if err != nil {
 		return xerrors.Errorf("error marshaling message: %v", err)
 	}
-	err = n.Unicast(pkt.Header.Source, connNopemsg)
+
+	hdr := transport.NewHeader(n.Addr(), n.Addr(), pkt.Header.Source, 0)
+	err = n.conf.Socket.Send(pkt.Header.Source, transport.Packet{
+		Msg:    &connNopemsg,
+		Header: &hdr,
+	}, 0)
 	if err != nil {
 		return xerrors.Errorf("error sending a connection nope: %v", err)
 	}
