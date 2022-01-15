@@ -69,7 +69,7 @@ func Test_Torrent_Data_Download_Three_Nodes(t *testing.T) {
 
 	node2 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
 	defer node2.Stop()
-	
+
 	node3 := z.NewTestNode(t, peerFac, transp, "127.0.0.1:0")
 	defer node2.Stop()
 
@@ -81,7 +81,7 @@ func Test_Torrent_Data_Download_Three_Nodes(t *testing.T) {
 	node2.AddPeer(node1.GetAddr())
 	node2.AddPeer(node3.GetAddr())
 	node3.AddPeer(node2.GetAddr())
-	
+
 	err := node2.StartTorrent("abc")
 	require.NoError(t, err)
 
@@ -95,5 +95,5 @@ func Test_Torrent_Data_Download_Three_Nodes(t *testing.T) {
 	require.Equal(t, fileContents, node1.GetFileParts("abc"))
 	require.Equal(t, fileContents, node2.GetFileParts("abc"))
 	require.Equal(t, fileContents, node3.GetFileParts("abc"))
-	
+
 }
