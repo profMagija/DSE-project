@@ -23,6 +23,12 @@ func init() {
 	GlobalRegistry.Add(types.StatusMessage{})
 	GlobalRegistry.Add(types.RumorsMessage{})
 	GlobalRegistry.Add(types.PrivateMessage{})
+	GlobalRegistry.Add(types.InitialPeerSearchMessage{})
+	GlobalRegistry.Add(types.InitialPeerResponseMessage{})
+	GlobalRegistry.Add(types.DataQueryRequest{})
+	GlobalRegistry.Add(types.DataQueryResponse{})
+	GlobalRegistry.Add(types.DataDownloadRequest{})
+	GlobalRegistry.Add(types.DataDownloadResponse{})
 }
 
 type globalRegistry struct {

@@ -24,16 +24,26 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 
 		rumourSeq: 0,
 
-		routeTable:  make(map[string]string),
-		status:      make(map[string]uint),
-		savedRumors: make(map[string][]types.Rumor),
-		ackNotif:    NotifChan{},
-		catalog:     make(peer.Catalog),
+		routeTable:       make(map[string]string),
+		status:           make(map[string]uint),
+		savedRumors:      make(map[string][]types.Rumor),
+		ackNotif:         NotifChan{},
+		catalog:          make(peer.Catalog),
+		torrentPeers:     make(map[string]map[string]struct{}),
+		torrentPeerWd:    make(map[string]map[string]*Watchdog),
+		torrentDataParts: make(map[string][]TorrentDataPart),
 	}
 
 	n.routeTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
 
 	return n
+}
+
+type TorrentDataPart struct {
+	Hash         []byte
+	Data         []byte
+	Downloading  string
+	Availability map[string]struct{}
 }
 
 // node implements a peer to build a Peerster system
@@ -57,11 +67,17 @@ type node struct {
 
 	ackNotif    NotifChan
 	searchNotif NotifChan
-	
+
 	searchDedup sync.Map
 
 	cataLock sync.RWMutex
 	catalog  peer.Catalog
+
+	torrentLock   sync.RWMutex
+	torrentPeers  map[string]map[string]struct{}
+	torrentPeerWd map[string]map[string]*Watchdog
+
+	torrentDataParts map[string][]TorrentDataPart
 }
 
 // Returns the current node address.
@@ -168,6 +184,13 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.processDataReplyMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.processSearchRequestMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.processSearchReplyMessage)
+
+	n.conf.MessageRegistry.RegisterMessageCallback(types.InitialPeerSearchMessage{}, n.processInitialPeerSearchMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.InitialPeerResponseMessage{}, n.processInitialPeerResponseMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataQueryRequest{}, n.processDataQueryRequestMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataQueryResponse{}, n.processDataQueryResponseMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataDownloadRequest{}, n.processDataDownloadRequest)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.DataDownloadResponse{}, n.processDataDownloadResponse)
 
 	return nil
 }
