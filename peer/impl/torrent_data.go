@@ -76,26 +76,22 @@ func (n *node) processInitialPeerSearchMessage(msg types.Message, pkt transport.
 		return xerrors.Errorf("wrong type: %T", msg)
 	}
 
-	c := n.GetCatalog()
-	catalog, hasCatalog := c[ipsm.FileID]
+	_, hasCatalog := n.torrentDataParts[ipsm.FileID]
 	if hasCatalog {
-		_, hasSelf := catalog[n.Addr()]
-		if hasSelf {
-			// we have this file, reply!
-			msg, err := n.conf.MessageRegistry.MarshalMessage(&types.InitialPeerResponseMessage{
-				RequestID: ipsm.RequestID,
-				FileID:    ipsm.FileID,
-				NumParts:  uint(len(n.torrentDataParts[ipsm.FileID])),
-			})
-			if err != nil {
-				return xerrors.Errorf("error marshaling response: %v", err)
-			}
-			err = n.Unicast(ipsm.Originator, msg)
-			if err != nil {
-				return xerrors.Errorf("error sending response: %v", err)
-			}
-			return nil
+		// we have this file, reply!
+		msg, err := n.conf.MessageRegistry.MarshalMessage(&types.InitialPeerResponseMessage{
+			RequestID: ipsm.RequestID,
+			FileID:    ipsm.FileID,
+			NumParts:  uint(len(n.torrentDataParts[ipsm.FileID])),
+		})
+		if err != nil {
+			return xerrors.Errorf("error marshaling response: %v", err)
 		}
+		err = n.Unicast(ipsm.Originator, msg)
+		if err != nil {
+			return xerrors.Errorf("error sending response: %v", err)
+		}
+		return nil
 	}
 
 	// we do not have this file
