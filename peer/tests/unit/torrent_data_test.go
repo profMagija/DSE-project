@@ -195,16 +195,16 @@ func Test_Torrent_Data_Download_Perf(t *testing.T) {
 		log.Debug().Msgf("RESULT: %d,%d,%d,%f,%f", NUM_NODES, NUM_CONNS, NUM_BLOCKS, float64(median.Nanoseconds()) / 1000000.0, float64(sum.Nanoseconds()) / float64(count) / 1000000.0)
 	}
 
-	// for _, numNodes := range [...]int{8, 16, 32, 48, 64, 80} {
-	// 	for i := 0; i < 15; i++ {
-	// 		util(numNodes, 3, 16)
-	// 	}
-	// }
-
-	for _, numConns := range [...]int{3, 5, 10, 15, 20} {
+	for _, numNodes := range [...]int{8, 16, 32, 48, 64, 80} {
 		for i := 0; i < 15; i++ {
-			util(48, numConns, 16)
+			util(numNodes, 3, 16)
 		}
 	}
+
+	// for _, numConns := range [...]int{3, 5, 10, 15, 20} {
+	// 	for i := 0; i < 15; i++ {
+	// 		util(48, numConns, 16)
+	// 	}
+	// }
 
 }
