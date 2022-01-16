@@ -4,7 +4,6 @@ import (
 	"math/rand"
 	"sync/atomic"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
@@ -17,7 +16,7 @@ import (
 // 3. if peer has some messages we do not, send them a status, so they can send them back (by 2. on their side)
 // 4. if neither 2. nor 3. is true, perform the "Continue Mongering" procedure
 func (n *node) processStatusMessage(msg types.Message, pkt transport.Packet) error {
-	log.Debug().Msgf("[%v] Processing status %v", n.Addr(), msg)
+	// log.Debug().Msgf("[%v] Processing status %v", n.Addr(), msg)
 	theirStatus, ok := msg.(*types.StatusMessage)
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
@@ -72,7 +71,7 @@ func (n *node) checkIfPeerKnowsMore(theirStatus *types.StatusMessage, myStatus t
 		}
 
 		if seq > mySeq {
-			log.Debug().Msgf("[%v] they have %v %v, (i have %v)", n.Addr(), origin, seq, mySeq)
+			// log.Debug().Msgf("[%v] they have %v %v, (i have %v)", n.Addr(), origin, seq, mySeq)
 			return true
 		}
 	}
@@ -103,7 +102,7 @@ func (n *node) checkIfWeKnowMode(theirStatus *types.StatusMessage, myStatus type
 
 // Send a list of rumors to the peer.
 func (n *node) sendRumorsToPeer(peer string, toSend []types.Rumor) error {
-	log.Debug().Msgf("[%v] sending %v rumors to %v", n.Addr(), len(toSend), peer)
+	// log.Debug().Msgf("[%v] sending %v rumors to %v", n.Addr(), len(toSend), peer)
 	rums := types.RumorsMessage{
 		Rumors: toSend,
 	}
@@ -148,20 +147,20 @@ func (n *node) sendStatusMessageTo(peer string) error {
 // 2. Pick a random peer, other than `originator` (the original status sender). If no peer exists, stop.
 // 3. Send that peer a status message.
 func (n *node) continueMongering(originator string) error {
-	log.Debug().Msgf("[%v] continuing mongering", n.Addr())
+	// log.Debug().Msgf("[%v] continuing mongering", n.Addr())
 	if rand.Float64() < n.conf.ContinueMongering {
 		peer, hasPeer := n.pickRandomPeer(originator)
 		if hasPeer {
-			log.Debug().Msgf("[%v] sending status to %v", n.Addr(), peer)
+			// log.Debug().Msgf("[%v] sending status to %v", n.Addr(), peer)
 			err := n.sendStatusMessageTo(peer)
 			if err != nil {
 				return err
 			}
 		} else {
-			log.Debug().Msgf("[%v] no one to monger to", n.Addr())
+			// log.Debug().Msgf("[%v] no one to monger to", n.Addr())
 		}
 	} else {
-		log.Debug().Msgf("[%v] failed monger check, prob = %v", n.Addr(), n.conf.ContinueMongering)
+		// log.Debug().Msgf("[%v] failed monger check, prob = %v", n.Addr(), n.conf.ContinueMongering)
 	}
 
 	return nil

@@ -1,7 +1,6 @@
 package impl
 
 import (
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
@@ -10,7 +9,7 @@ import (
 // Processes the RumorsMessage. Processes the internal rumors, ACKs the message, and then (if any rumors were processed)
 // spreads the rumor further.
 func (n *node) processRumorsMessage(msg types.Message, pkt transport.Packet) error {
-	log.Debug().Msgf("[%v] Processing rumors %v", n.Addr(), msg)
+	// log.Debug().Msgf("[%v] Processing rumors %v", n.Addr(), msg)
 	rumors, ok := msg.(*types.RumorsMessage)
 	if !ok {
 		return xerrors.Errorf("wrong type: %T", msg)
@@ -27,7 +26,7 @@ func (n *node) processRumorsMessage(msg types.Message, pkt transport.Packet) err
 	if sender != n.Addr() {
 		go n.sendRumorAck(sender, pkt)
 	} else {
-		log.Debug().Msgf("[%v] self message, not acking", n.Addr())
+		// log.Debug().Msgf("[%v] self message, not acking", n.Addr())
 	}
 
 	if anyProcessedRumors {
@@ -44,7 +43,7 @@ func (n *node) sendRumorAck(sender string, pkt transport.Packet) {
 		Status:        n.copyStatus(),
 	}
 
-	log.Debug().Msgf("[%v] sending ack to %v", n.Addr(), sender)
+	// log.Debug().Msgf("[%v] sending ack to %v", n.Addr(), sender)
 	ackMsg, err := n.conf.MessageRegistry.MarshalMessage(ack)
 	if err != nil {
 		panic(xerrors.Errorf("error marshaling message: %v", err))
@@ -77,7 +76,7 @@ func (n *node) processRumorsInternal(rumors *types.RumorsMessage, pkt transport.
 			}
 			anyProcessedRumors = true
 		} else {
-			log.Debug().Msgf("[%v] expected %v got %v from %v status=%v", n.Addr(), prevStat+1, rum.Sequence, rum.Origin, n.status)
+			// log.Debug().Msgf("[%v] expected %v got %v from %v status=%v", n.Addr(), prevStat+1, rum.Sequence, rum.Origin, n.status)
 		}
 	}
 
@@ -87,7 +86,7 @@ func (n *node) processRumorsInternal(rumors *types.RumorsMessage, pkt transport.
 // Processes a single rumor message, by constructing an equivalent packet, and processing that using the MessageRegistry.
 // Also adds the routing info for the originator of the rumor, if we have no info about it.
 func (n *node) processSingleRumorInternal(rum types.Rumor, pkt transport.Packet) error {
-	log.Debug().Msgf("[%v] received %v from %v", n.Addr(), rum.Sequence, rum.Origin)
+	// log.Debug().Msgf("[%v] received %v from %v", n.Addr(), rum.Sequence, rum.Origin)
 	n.status[rum.Origin] = rum.Sequence
 	n.savedRumors[rum.Origin] = append(n.savedRumors[rum.Origin], rum)
 	hdr := transport.NewHeader(rum.Origin, pkt.Header.RelayedBy, pkt.Header.Destination, 0)
@@ -103,7 +102,7 @@ func (n *node) processSingleRumorInternal(rum types.Rumor, pkt transport.Packet)
 		n.SetRoutingEntry(rum.Origin, pkt.Header.RelayedBy)
 	}
 
-	log.Debug().Msgf("[%v] done processing", n.Addr())
+	// log.Debug().Msgf("[%v] done processing", n.Addr())
 	return nil
 }
 
@@ -115,7 +114,7 @@ func (n *node) spreadRumor(sender string, msg *transport.Message) {
 	for {
 		peer, ok := n.pickRandomPeer(except...)
 		if ok {
-			log.Debug().Msgf("[%v] resending rumor to %v (excluding=%v)", n.Addr(), peer, except)
+			// log.Debug().Msgf("[%v] resending rumor to %v (excluding=%v)", n.Addr(), peer, except)
 			hdr2 := transport.NewHeader(n.Addr(), n.Addr(), peer, 0)
 			pkt2 := transport.Packet{
 				Header: &hdr2,
@@ -126,20 +125,20 @@ func (n *node) spreadRumor(sender string, msg *transport.Message) {
 
 			err := n.conf.Socket.Send(peer, pkt2, n.conf.AckTimeout)
 			if err != nil {
-				log.Debug().Msgf("[%v] sending failed with %v, retrying with different peer ...", n.Addr(), err)
+				// log.Debug().Msgf("[%v] sending failed with %v, retrying with different peer ...", n.Addr(), err)
 				except = append(except, peer)
 				continue
 			}
 
 			if _, ok := n.ackNotif.WaitChanTimeout(hdr2.PacketID, n.conf.AckTimeout); ok {
-				log.Debug().Msgf("[%v] rumor acked", n.Addr())
+				// log.Debug().Msgf("[%v] rumor acked", n.Addr())
 				return
 			}
 
-			log.Debug().Msgf("[%v] ack timeout reached, retrying with different peer ...", n.Addr())
+			// log.Debug().Msgf("[%v] ack timeout reached, retrying with different peer ...", n.Addr())
 			except = append(except, peer)
 		} else {
-			log.Debug().Msgf("[%v] no peers to send to :( received from %v", n.Addr(), sender)
+			// log.Debug().Msgf("[%v] no peers to send to :( received from %v", n.Addr(), sender)
 			return
 		}
 	}

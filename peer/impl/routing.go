@@ -172,3 +172,24 @@ func (n *node) getBubblePeerPermutation(except ...string) []string {
 
 	return res
 }
+
+// Get all bubble peers (except the ones in the arguments), in a random permutation.
+func (n *node) getPeerPermutation(except ...string) []string {
+	n.routeMutex.RLock()
+	defer n.routeMutex.RUnlock()
+
+	res := make([]string, 0)
+	for p := range n.routeTable {
+		if !memberOf(p, except) {
+			res = append(res, p)
+		}
+	}
+
+	rand.Shuffle(len(res), func(i, j int) {
+		tmp := res[i]
+		res[i] = res[j]
+		res[j] = tmp
+	})
+
+	return res
+}

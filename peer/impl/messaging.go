@@ -3,7 +3,6 @@ package impl
 import (
 	"sync/atomic"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
@@ -30,7 +29,7 @@ func (n *node) Unicast(dest string, msg transport.Message) error {
 //
 // Broadcasts the given message to all nodes on the network
 func (n *node) Broadcast(msg transport.Message) error {
-	log.Debug().Msgf("broadcasting message %v", msg)
+	// log.Debug().Msgf("broadcasting message %v", msg)
 
 	rm := types.RumorsMessage{
 		Rumors: make([]types.Rumor, 1),

@@ -196,6 +196,10 @@ func start(c *urfave.Context) error {
 			Retry:   c.Uint("backoffretry"),
 		},
 		Storage: storage,
+
+		BubbleGraphDegree:  1,
+		BubbleGraphTTL:     0,
+		BubbleGraphTimeout: 500 * time.Millisecond,
 	}
 
 	node := peerFactory(conf)

@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
@@ -23,8 +22,12 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		conf:    conf,
 		addr:    conf.Socket.GetAddress(),
 
-		rumourSeq:  0,
-		routeTable: make(map[string]string),
+		rumourSeq:   0,
+		routeTable:  make(map[string]string),
+		status:      make(map[string]uint),
+		savedRumors: make(map[string][]types.Rumor),
+		ackNotif:    NotifChan{},
+		catalog:     make(peer.Catalog),
 
 		torrentPeers:      make(map[string]map[string]struct{}),
 		torrentPeerWd:     make(map[string]map[string]*Watchdog),
@@ -193,7 +196,7 @@ func (n *node) listenerLoop() {
 func (n *node) Start() error {
 	go n.listenerLoop()
 
-	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+	// zerolog.SetGlobalLevel(zerolog.ErrorLevel)
 
 	if n.conf.AntiEntropyInterval != 0 {
 		go n.antiEntropyLoop()
