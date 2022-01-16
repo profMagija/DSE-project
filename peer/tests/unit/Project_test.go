@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
-	"strconv"
 	"testing"
 	"time"
 
@@ -82,13 +81,10 @@ func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT)
 	chunkSize := uint(2)
 	opts := []z.Option{
 		z.WithChunkSize(chunkSize),
-		// at least every peer will send a heartbeat message on start,
-		// which will make everyone to have an entry in its routing
-		// table to every one else, thanks to the antientropy.
-		z.WithHeartbeat(time.Second * 200),
+		z.WithHeartbeat(time.Second * 30),
 		z.WithAntiEntropy(time.Second),
 		z.WithAckTimeout(time.Second * 10),
-		z.WithBubbleGraph(5, 10, time.Millisecond*200),
+		z.WithBubbleGraph(10, 10, time.Millisecond*200),
 	}
 
 	nodes := build_nodes(t, transp, graph, opts)
@@ -109,15 +105,15 @@ func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT)
 	}
 
 	names, err := nodes[0].SearchAll(*regexp.MustCompile("file.*"), uint(len(graph)), time.Second*time.Duration(len(graph)/4))
-	sort.Slice(names, func(i, j int) bool {
-		val1, _ := strconv.Atoi(names[i][4:])
-		val2, _ := strconv.Atoi(names[j][4:])
-		return val1 < val2
-	})
-	for _, name := range names {
-		print(name, " ")
-	}
-	println()
+	// sort.Slice(names, func(i, j int) bool {
+	// 	val1, _ := strconv.Atoi(names[i][4:])
+	// 	val2, _ := strconv.Atoi(names[j][4:])
+	// 	return val1 < val2
+	// })
+	// for _, name := range names {
+	// 	print(name, " ")
+	// }
+	// println()
 	require.NoError(t, err)
 
 	return uint(len(names))
@@ -127,13 +123,10 @@ func evaluate_search_first(t *testing.T, transp transport.Transport, graph graph
 	chunkSize := uint(2)
 	opts := []z.Option{
 		z.WithChunkSize(chunkSize),
-		// at least every peer will send a heartbeat message on start,
-		// which will make everyone to have an entry in its routing
-		// table to every one else, thanks to the antientropy.
-		z.WithHeartbeat(time.Second * 200),
+		z.WithHeartbeat(time.Second * 30),
 		z.WithAntiEntropy(time.Second),
 		z.WithAckTimeout(time.Second * 10),
-		z.WithBubbleGraph(5, 10, time.Millisecond*200),
+		z.WithBubbleGraph(10, 10, time.Millisecond*200),
 	}
 
 	nodes := build_nodes(t, transp, graph, opts)
@@ -161,7 +154,7 @@ func evaluate_search_first(t *testing.T, transp transport.Transport, graph graph
 	elapsed := time.Since(start)
 	require.NoError(t, err)
 
-	return elapsed
+	return elapsed / 1000
 }
 
 func print_graph(graph graphT) {
@@ -176,19 +169,39 @@ func print_graph(graph graphT) {
 }
 
 func Test_Project_SearchFirst(t *testing.T) {
+	retries := 20
+	results := make([]time.Duration, retries)
 	for _, n := range []uint{8, 16, 32, 48, 64, 80} {
 		graph := generate_topology(n)
 		// print_graph(graph)
-		time := evaluate_search_first(t, udpFac(), graph)
-		fmt.Printf("Evaluating SearchFirst with topology of size %d: took %d ns\n", n, time)
+
+		print("Size=", n, ": ")
+		for i := 0; i < retries; i++ {
+			results[i] = evaluate_search_first(t, udpFac(), graph)
+			print(results[i], " ")
+		}
+		println()
+		sort.Slice(results, func(i, j int) bool { return results[i] < results[j] })
+
+		fmt.Printf("Evaluating SearchFirst with topology of size %d: took %d us\n", n, results[retries/2])
 	}
 }
 
 func Test_Project_SearchAll(t *testing.T) {
+	retries := 20
+	results := make([]uint, retries)
 	for _, n := range []uint{8, 16, 32, 48, 64, 80} {
 		graph := generate_topology(n)
 		// print_graph(graph)
-		num := evaluate_search_all(t, udpFac(), graph)
-		fmt.Printf("Evaluating SearchAll with topology of size %d: found %d\n", n, num)
+
+		print("Size=", n, ": ")
+		for i := 0; i < retries; i++ {
+			results[i] = evaluate_search_all(t, udpFac(), graph)
+			print(results[i], " ")
+		}
+		println()
+		sort.Slice(results, func(i, j int) bool { return results[i] < results[j] })
+
+		fmt.Printf("Evaluating SearchAll with topology of size %d: found %d\n", n, results[retries/2])
 	}
 }
