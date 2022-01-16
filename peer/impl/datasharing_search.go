@@ -130,6 +130,7 @@ func (n *node) constructFileInfos(reg regexp.Regexp) []types.FileInfo {
 		metafileBytes := dstore.Get(string(val))
 		if metafileBytes == nil {
 			// we do not have the metafile
+			fis = append(fis, fi)
 			return true
 		}
 		metafile := string(metafileBytes)
