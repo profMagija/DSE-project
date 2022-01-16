@@ -137,6 +137,10 @@ type configTemplate struct {
 	storage storage.Storage
 
 	dataRequestBackoff peer.Backoff
+
+	BubbleGraphDegree  uint
+	BubbleGraphTTL     uint
+	BubbleGraphTimeout time.Duration
 }
 
 func newConfigTemplate() configTemplate {
@@ -238,6 +242,14 @@ func WithDataRequestBackoff(initial time.Duration, factor uint, retry uint) Opti
 	}
 }
 
+func WithBubbleGraph(degree, TTL uint, timeout time.Duration) Option {
+	return func(ct *configTemplate) {
+		ct.BubbleGraphDegree = degree
+		ct.BubbleGraphTTL = TTL
+		ct.BubbleGraphTimeout = timeout
+	}
+}
+
 // NewTestNode returns a new test node.
 func NewTestNode(t *testing.T, f peer.Factory, trans transport.Transport,
 	addr string, opts ...Option) TestNode {
@@ -261,6 +273,9 @@ func NewTestNode(t *testing.T, f peer.Factory, trans transport.Transport,
 	config.Storage = template.storage
 	config.ChunkSize = template.chunkSize
 	config.BackoffDataRequest = template.dataRequestBackoff
+	config.BubbleGraphDegree = template.BubbleGraphDegree
+	config.BubbleGraphTTL = template.BubbleGraphTTL
+	config.BubbleGraphTimeout = template.BubbleGraphTimeout
 
 	node := f(config)
 

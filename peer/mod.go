@@ -62,6 +62,10 @@ type Configuration struct {
 	BackoffDataRequest Backoff
 
 	Storage storage.Storage
+
+	BubbleGraphDegree  uint
+	BubbleGraphTTL     uint
+	BubbleGraphTimeout time.Duration
 }
 
 // Backoff describes parameters for a backoff algorithm. The initial time must

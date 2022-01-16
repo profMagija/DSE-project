@@ -194,7 +194,7 @@ func (n *node) getNamesMatching(reg regexp.Regexp) []string {
 // The `namer` is called before each request send, and should return the requestID.
 // Budget is divided equally among the peers.
 func (n *node) screamSearchRequest(origin string, budget uint, reg regexp.Regexp, namer func() string, exceptPeers ...string) error {
-	peers := n.getPeerPermutation(exceptPeers...)
+	peers := n.getBubblePeerPermutation(exceptPeers...)
 	remaining := uint(len(peers))
 
 	for _, p := range peers {

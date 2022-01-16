@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
@@ -22,17 +23,15 @@ func NewPeer(conf peer.Configuration) peer.Peer {
 		conf:    conf,
 		addr:    conf.Socket.GetAddress(),
 
-		rumourSeq: 0,
+		rumourSeq:  0,
+		routeTable: make(map[string]string),
 
-		routeTable:        make(map[string]string),
-		status:            make(map[string]uint),
-		savedRumors:       make(map[string][]types.Rumor),
-		ackNotif:          NotifChan{},
-		catalog:           make(peer.Catalog),
 		torrentPeers:      make(map[string]map[string]struct{}),
 		torrentPeerWd:     make(map[string]map[string]*Watchdog),
 		torrentDataParts:  make(map[string][]TorrentDataPart),
 		torrentFinishTime: make(map[string]time.Time),
+
+		bubbleTable: make(map[string]struct{}),
 	}
 
 	n.routeTable[conf.Socket.GetAddress()] = conf.Socket.GetAddress()
@@ -65,6 +64,9 @@ type node struct {
 
 	routeMutex sync.RWMutex
 	routeTable map[string]string
+
+	bubbleMutex sync.RWMutex
+	bubbleTable map[string]struct{}
 
 	ackNotif    NotifChan
 	searchNotif NotifChan
@@ -146,6 +148,30 @@ func (n *node) heartbeatLoop() {
 	}
 }
 
+// The bubble graph loop. Only call this if BubbleGraphTimeout != 0.
+// Periodically sends SplitEdgeMessages in order to reach BubbleGraphDegree neighbors.
+// Panics on all errors.
+func (n *node) bubbleGraphLoop() {
+	for n.IsRunning() {
+		time.Sleep(n.conf.BubbleGraphTimeout)
+
+		n.bubbleMutex.RLock()
+		current := len(n.bubbleTable)
+		n.bubbleMutex.RUnlock()
+
+		for i := current; i < int(n.conf.BubbleGraphDegree); i++ {
+			peer, ok := n.pickRandomPeer()
+			if !ok {
+				continue
+			}
+			err := n.SendSplitEdge(n.Addr(), peer, n.conf.BubbleGraphTTL)
+			if err != nil {
+				panic(err)
+			}
+		}
+	}
+}
+
 // The listener loop. Receives the packets, and spawns a handler goroutine.
 // Panics on all errors.
 func (n *node) listenerLoop() {
@@ -167,12 +193,18 @@ func (n *node) listenerLoop() {
 func (n *node) Start() error {
 	go n.listenerLoop()
 
+	zerolog.SetGlobalLevel(zerolog.ErrorLevel)
+
 	if n.conf.AntiEntropyInterval != 0 {
 		go n.antiEntropyLoop()
 	}
 
 	if n.conf.HeartbeatInterval != 0 {
 		go n.heartbeatLoop()
+	}
+
+	if n.conf.BubbleGraphTimeout != 0 {
+		go n.bubbleGraphLoop()
 	}
 
 	n.conf.MessageRegistry.RegisterMessageCallback(types.ChatMessage{}, n.processChatMessage)
@@ -185,6 +217,10 @@ func (n *node) Start() error {
 	n.conf.MessageRegistry.RegisterMessageCallback(types.DataReplyMessage{}, n.processDataReplyMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchRequestMessage{}, n.processSearchRequestMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.SearchReplyMessage{}, n.processSearchReplyMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.SplitEdgeMessage{}, n.processSplitEdgeMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.RedirectMessage{}, n.processRedirectMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.ConnectionHelloMessage{}, n.processConnectionHelloMessage)
+	n.conf.MessageRegistry.RegisterMessageCallback(types.ConnectionNopeMessage{}, n.processConnectionNopeMessage)
 
 	n.conf.MessageRegistry.RegisterMessageCallback(types.InitialPeerSearchMessage{}, n.processInitialPeerSearchMessage)
 	n.conf.MessageRegistry.RegisterMessageCallback(types.InitialPeerResponseMessage{}, n.processInitialPeerResponseMessage)

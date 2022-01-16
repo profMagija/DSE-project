@@ -186,6 +186,98 @@ func (p PrivateMessage) HTML() string {
 }
 
 // -----------------------------------------------------------------------------
+// SplitEdgeMessage
+
+// SplitEdgeMessage implements types.Message.
+func (p SplitEdgeMessage) NewEmpty() Message {
+	return &SplitEdgeMessage{}
+}
+
+// Name implements types.Message.
+func (p SplitEdgeMessage) Name() string {
+	return "SplitEdgeMessage"
+}
+
+// String implements types.Message.
+func (p SplitEdgeMessage) String() string {
+	return fmt.Sprintf("split edge message %v", p.TTL)
+}
+
+// HTML implements types.Message.
+func (p SplitEdgeMessage) HTML() string {
+	return fmt.Sprintf("split edge message %v", p.TTL)
+}
+
+// -----------------------------------------------------------------------------
+// RedirectMessage
+
+// RedirectMessage implements types.Message.
+func (p RedirectMessage) NewEmpty() Message {
+	return &RedirectMessage{}
+}
+
+// Name implements types.Message.
+func (p RedirectMessage) Name() string {
+	return "RedirectMessage"
+}
+
+// String implements types.Message.
+func (p RedirectMessage) String() string {
+	return fmt.Sprintf("redirect message splited by %s", p.Split)
+}
+
+// HTML implements types.Message.
+func (p RedirectMessage) HTML() string {
+	return fmt.Sprintf("redirect message splited by %s", p.Split)
+}
+
+// -----------------------------------------------------------------------------
+// ConnectionHelloMessage
+
+// ConnectionHelloMessage implements types.Message.
+func (p ConnectionHelloMessage) NewEmpty() Message {
+	return &ConnectionHelloMessage{}
+}
+
+// Name implements types.Message.
+func (p ConnectionHelloMessage) Name() string {
+	return "ConnectionHelloMessage"
+}
+
+// String implements types.Message.
+func (p ConnectionHelloMessage) String() string {
+	return "connection hello message"
+}
+
+// HTML implements types.Message.
+func (p ConnectionHelloMessage) HTML() string {
+	return "connection hello message"
+}
+
+// -----------------------------------------------------------------------------
+// ConnectionNopeMessage
+
+// ConnectionNopeMessage implements types.Message.
+func (p ConnectionNopeMessage) NewEmpty() Message {
+	return &ConnectionNopeMessage{}
+}
+
+// Name implements types.Message.
+func (p ConnectionNopeMessage) Name() string {
+	return "ConnectionNopeMessage"
+}
+
+// String implements types.Message.
+func (p ConnectionNopeMessage) String() string {
+	return "connection nope message"
+}
+
+// HTML implements types.Message.
+func (p ConnectionNopeMessage) HTML() string {
+	return "connection nope message"
+}
+
+// -----------------------------------------------------------------------------
 // utility functions
 
 // RumorByOrigin sorts rumor by origin

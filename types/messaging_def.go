@@ -70,3 +70,15 @@ type PrivateMessage struct {
 	// Msg is the private message to be read by the recipients
 	Msg *transport.Message
 }
+
+type SplitEdgeMessage struct {
+	TTL uint
+}
+
+type RedirectMessage struct {
+	Split string // address of the node to insert between self and the Originator
+}
+
+type ConnectionHelloMessage struct{}
+
+type ConnectionNopeMessage struct{}
