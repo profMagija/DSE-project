@@ -1,3 +1,4 @@
 
 node1: go run mod.go start --proxyaddr 127.0.0.1:8000 --nodeaddr 127.0.0.1:9000 --antientropy 1s --heartbeat 1s
 node2: go run mod.go start --proxyaddr 127.0.0.1:8001 --nodeaddr 127.0.0.1:9001 --antientropy 1s --heartbeat 1s
+#node3: go run mod.go start --proxyaddr 127.0.0.1:8002 --nodeaddr 127.0.0.1:9002 --antientropy 1s --heartbeat 1s
