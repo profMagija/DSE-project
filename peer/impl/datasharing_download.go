@@ -1,12 +1,10 @@
 package impl
 
 import (
-	"strings"
 	"time"
 
 	"github.com/rs/xid"
 	"github.com/rs/zerolog/log"
-	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 	"go.dedis.ch/cs438/types"
 	"golang.org/x/xerrors"
@@ -110,19 +108,43 @@ func (n *node) getChunk(key string) ([]byte, error) {
 
 // implements peer.DataSharing
 func (n *node) Download(metahash string) ([]byte, error) {
-	metafileb, err := n.getChunk(metahash)
-	if err != nil {
-		return nil, xerrors.Errorf("error getting metafile: %v", err)
-	}
-	metafile := string(metafileb)
-	chunkKeys := strings.Split(metafile, peer.MetafileSep)
-	fileData := make([]byte, 0, len(chunkKeys)*int(n.conf.ChunkSize))
-	for i, chunkKey := range chunkKeys {
-		chunkData, err := n.getChunk(chunkKey)
+	// metafileb, err := n.getChunk(metahash)
+	// if err != nil {
+	// 	return nil, xerrors.Errorf("error getting metafile: %v", err)
+	// }
+	// metafile := string(metafileb)
+	// chunkKeys := strings.Split(metafile, peer.MetafileSep)
+	// fileData := make([]byte, 0, len(chunkKeys)*int(n.conf.ChunkSize))
+	// for i, chunkKey := range chunkKeys {
+	// 	chunkData, err := n.getChunk(chunkKey)
+	// 	if err != nil {
+	// 		return nil, xerrors.Errorf("error getting chunk %d/%d: %v", i+1, len(chunkKeys), err)
+	// 	}
+	// 	fileData = append(fileData, chunkData...)
+	// }
+	// return fileData, nil
+
+	if n.torrentDataParts[metahash] == nil {
+		err := n.StartTorrent(metahash)
+		log.Debug().Msgf("[%s] Started torrent %s", n.addr, metahash)
 		if err != nil {
-			return nil, xerrors.Errorf("error getting chunk %d/%d: %v", i+1, len(chunkKeys), err)
+			return nil, xerrors.Errorf("error starting torrent: %v", err)
 		}
-		fileData = append(fileData, chunkData...)
+		return nil, nil
 	}
-	return fileData, nil
+
+	for _, part := range n.torrentDataParts[metahash] {
+		if part.Data == nil {
+			log.Debug().Msgf("[%s] torrent in progress %s", n.addr, metahash)
+			return nil, nil
+		}
+	}
+	log.Debug().Msgf("[%s] torrent complete %s", n.addr, metahash)
+
+	result := make([]byte, 0)
+	for _, part := range n.torrentDataParts[metahash] {
+		result = append(result, part.Data...)
+	}
+	
+	return result, nil
 }

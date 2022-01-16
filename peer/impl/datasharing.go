@@ -43,9 +43,10 @@ func hashF(b []byte) (string, []byte) {
 // implements peer.DataSharing
 func (n *node) Upload(data io.Reader) (metahash string, err error) {
 	log.Debug().Msgf("[%v] starting upload", n.addr)
-	store := n.conf.Storage.GetDataBlobStore()
+	// store := n.conf.Storage.GetDataBlobStore()
 	meta := ""
 	metaKeyBytes := make([]byte, 0)
+	var chunks [][]byte
 	for {
 		buf := make([]byte, n.conf.ChunkSize)
 		chunkSize, err := readExact(data, buf)
@@ -56,23 +57,24 @@ func (n *node) Upload(data io.Reader) (metahash string, err error) {
 			break
 		}
 		chunkData := buf[:chunkSize]
-		
+
 		chunkHash, chunkHashBytes := hashF(chunkData)
-		store.Set(chunkHash, chunkData)
+		chunks = append(chunks, chunkData)
 		log.Debug().Msgf("[%v] chunk %v -> %v", n.addr, chunkData, chunkHash)
-		
+
 		if len(meta) != 0 {
 			meta += peer.MetafileSep
 		}
 		meta += chunkHash
 		metaKeyBytes = append(metaKeyBytes, chunkHashBytes...)
 	}
-	
+
 	log.Debug().Msgf("[%v] metafile: %v", n.addr, meta)
-	
+
 	metahash, _ = hashF(metaKeyBytes)
-	store.Set(metahash, []byte(meta))
-	
+
+	n.UploadFile(metahash, chunks)
+
 	return
 }
 
@@ -98,12 +100,12 @@ func (n *node) Resolve(name string) (metahash string) {
 func (n *node) getCatalogRandomPeer(key string) (string, bool) {
 	n.cataLock.RLock()
 	defer n.cataLock.RUnlock()
-	
+
 	m, ok := n.catalog[key]
 	if !ok || len(m) == 0 {
 		return "", false
 	}
-	
+
 	cur := ""
 	count := 0
 	for p := range m {
@@ -124,7 +126,7 @@ func (n *node) GetCatalog() peer.Catalog {
 func (n *node) UpdateCatalog(key string, peer string) {
 	n.cataLock.Lock()
 	defer n.cataLock.Unlock()
-	
+
 	m, ok := n.catalog[key]
 	if !ok {
 		m = make(map[string]struct{})

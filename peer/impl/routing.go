@@ -3,7 +3,6 @@ package impl
 import (
 	"math/rand"
 
-	"github.com/rs/zerolog/log"
 	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 	"golang.org/x/xerrors"
@@ -59,9 +58,9 @@ func (n *node) relayPacket(pkt transport.Packet) error {
 	dest := pkt.Header.Destination
 	nextHop, ok := n.determineNextHop(dest)
 	if !ok {
-		return xerrors.Errorf("no route to target: %s", dest)
+		return xerrors.Errorf("no route from %s to target: %s", n.addr, dest)
 	}
-	log.Debug().Msgf("Relaying to %s via %s", dest, nextHop)
+	// log.Debug().Msgf("Relaying to %s via %s", dest, nextHop)
 
 	pkt.Header.RelayedBy = n.Addr()
 
