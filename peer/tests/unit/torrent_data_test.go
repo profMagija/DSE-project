@@ -2,6 +2,7 @@ package unit
 
 import (
 	"math/rand"
+	"sort"
 	"testing"
 	"time"
 
@@ -168,23 +169,30 @@ func Test_Torrent_Data_Download_Perf(t *testing.T) {
 			}
 		}
 
-		sum := 0 * time.Second
-		count := 0
-
+		var values []time.Duration
 		for i := range nodes {
 			if i == originator {
 				continue
 			}
-			endTime := nodes[i].GetFinishTime("abc")
-			dur := endTime.Sub(startTimes[i])
-
-			if dur > 0 {
-				sum += dur
-				count += 1
-			}
+			values = append(values, nodes[i].GetFinishTime("abc").Sub(startTimes[i]))
 		}
 
-		log.Debug().Msgf("RESULT: %d,%d,%d,%d", NUM_NODES, NUM_CONNS, NUM_BLOCKS, sum.Nanoseconds()/int64(count))
+		count := len(nodes) - 1
+
+		sort.Slice(values, func(i, j int) bool {
+			return values[i] < values[j]
+		})
+		
+		// log.Debug().Msgf("%v", values)
+		
+		median := values[(count - 1) / 2]
+		sum := time.Duration(0)
+		for _, v := range values {
+			sum += v
+		}
+		
+
+		log.Debug().Msgf("RESULT: %d,%d,%d,%f,%f", NUM_NODES, NUM_CONNS, NUM_BLOCKS, float64(median.Nanoseconds()) / 1000000.0, float64(sum.Nanoseconds()) / float64(count) / 1000000.0)
 	}
 
 	// for _, numNodes := range [...]int{8, 16, 32, 48, 64, 80} {
@@ -192,12 +200,11 @@ func Test_Torrent_Data_Download_Perf(t *testing.T) {
 	// 		util(numNodes, 3, 16)
 	// 	}
 	// }
-	
-	// for _, numConns := range [...]int{3, 5, 10, 15, 20} {
-	// 	for i := 0; i < 15; i++ {
-	// 		util(48, numConns, 16)
-	// 	}
-	// }
-	
+
+	for _, numConns := range [...]int{3, 5, 10, 15, 20} {
+		for i := 0; i < 15; i++ {
+			util(48, numConns, 16)
+		}
+	}
 
 }
