@@ -11,6 +11,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 	z "go.dedis.ch/cs438/internal/testing"
+	"go.dedis.ch/cs438/peer"
 	"go.dedis.ch/cs438/transport"
 )
 
@@ -77,7 +78,7 @@ func build_nodes(t *testing.T, transp transport.Transport, edges graphT, opts []
 	return nodes
 }
 
-func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT, budget uint) uint {
+func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT) uint {
 	chunkSize := uint(2)
 	opts := []z.Option{
 		z.WithChunkSize(chunkSize),
@@ -87,7 +88,7 @@ func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT,
 		z.WithHeartbeat(time.Second * 200),
 		z.WithAntiEntropy(time.Second),
 		z.WithAckTimeout(time.Second * 10),
-		z.WithBubbleGraph(10, 10, time.Millisecond*200),
+		z.WithBubbleGraph(5, 10, time.Millisecond*200),
 	}
 
 	nodes := build_nodes(t, transp, graph, opts)
@@ -107,7 +108,7 @@ func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT,
 		require.NoError(t, err)
 	}
 
-	names, err := nodes[0].SearchAll(*regexp.MustCompile("file.*"), budget, time.Second*time.Duration(budget/4))
+	names, err := nodes[0].SearchAll(*regexp.MustCompile("file.*"), uint(len(graph)), time.Second*time.Duration(len(graph)/4))
 	sort.Slice(names, func(i, j int) bool {
 		val1, _ := strconv.Atoi(names[i][4:])
 		val2, _ := strconv.Atoi(names[j][4:])
@@ -122,15 +123,46 @@ func evaluate_search_all(t *testing.T, transp transport.Transport, graph graphT,
 	return uint(len(names))
 }
 
-// conf := peer.ExpandingRing{
-// 	Initial: 1,
-// 	Factor:  2,
-// 	Retry:   5,
-// 	Timeout: time.Second * 2,
-// }
-// name, err := nodeA.SearchFirst(*regexp.MustCompile("fileD"), conf)
-// require.NoError(t, err)
-// require.Equal(t, "fileD", name)
+func evaluate_search_first(t *testing.T, transp transport.Transport, graph graphT) time.Duration {
+	chunkSize := uint(2)
+	opts := []z.Option{
+		z.WithChunkSize(chunkSize),
+		// at least every peer will send a heartbeat message on start,
+		// which will make everyone to have an entry in its routing
+		// table to every one else, thanks to the antientropy.
+		z.WithHeartbeat(time.Second * 200),
+		z.WithAntiEntropy(time.Second),
+		z.WithAckTimeout(time.Second * 10),
+		z.WithBubbleGraph(5, 10, time.Millisecond*200),
+	}
+
+	nodes := build_nodes(t, transp, graph, opts)
+	for _, n := range nodes {
+		defer n.Stop()
+	}
+
+	time.Sleep(time.Second * 5)
+
+	file := []byte("lorem ipsum dolor sit amet")
+	mh, err := nodes[len(graph)/2].Upload(bytes.NewBuffer(file))
+	require.NoError(t, err)
+	err = nodes[len(graph)/2].Tag("file", mh)
+	require.NoError(t, err)
+
+	conf := peer.ExpandingRing{
+		Initial: 4,
+		Factor:  2,
+		Retry:   100,
+		Timeout: time.Millisecond * 500,
+	}
+
+	start := time.Now()
+	_, err = nodes[0].SearchFirst(*regexp.MustCompile("file"), conf)
+	elapsed := time.Since(start)
+	require.NoError(t, err)
+
+	return elapsed
+}
 
 func print_graph(graph graphT) {
 	println("Size", len(graph))
@@ -143,11 +175,20 @@ func print_graph(graph graphT) {
 	}
 }
 
-func Test_Project_Test1(t *testing.T) {
+func Test_Project_SearchFirst(t *testing.T) {
 	for _, n := range []uint{8, 16, 32, 48, 64, 80} {
 		graph := generate_topology(n)
 		// print_graph(graph)
-		num := evaluate_search_all(t, udpFac(), graph, n)
+		time := evaluate_search_first(t, udpFac(), graph)
+		fmt.Printf("Evaluating SearchFirst with topology of size %d: took %d ns\n", n, time)
+	}
+}
+
+func Test_Project_SearchAll(t *testing.T) {
+	for _, n := range []uint{8, 16, 32, 48, 64, 80} {
+		graph := generate_topology(n)
+		// print_graph(graph)
+		num := evaluate_search_all(t, udpFac(), graph)
 		fmt.Printf("Evaluating SearchAll with topology of size %d: found %d\n", n, num)
 	}
 }
